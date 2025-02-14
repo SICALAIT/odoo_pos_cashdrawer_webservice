@@ -50,12 +50,42 @@ python build.py
 
 Le service expose trois endpoints sur le port 22548 :
 
-Localement (localhost uniquement) :
-- `GET http://localhost:22548/open-cash-drawer` : Ouvre le tiroir-caisse (endpoint utilisé par le module Odoo)
+```mermaid
+flowchart TB
+    A[Endpoints :22548]
+    
+    A --> B[Local uniquement]
+    A --> C[Accès Réseau]
+    
+    B --> D[GET /open-cash-drawer]
+    D --> E[Ouvre le tiroir-caisse]
+    
+    C --> F[GET /status]
+    F --> G[Vérifie le service]
+    
+    C --> H[GET /logs]
+    H --> I[Télécharge les logs]
 
-Accessible depuis le réseau :
-- `GET http://<ip-machine>:22548/status` : Vérifie si le service est actif
-- `GET http://<ip-machine>:22548/logs` : Télécharge le fichier de logs actuel
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#fdd,stroke:#333,stroke-width:2px
+    style C fill:#dfd,stroke:#333,stroke-width:2px
+```
+
+### Architecture du service
+
+```mermaid
+flowchart LR
+    A[Module Odoo] -->|Local| B[Webservice<br>Port 22548]
+    C[Admin Réseau] -->|Distant| B
+    B -->|ESC/POS| D[Tiroir-caisse<br>TICKET]
+    B -->|Rotation| E[Logs<br>30 jours]
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style C fill:#dfd,stroke:#333,stroke-width:2px
+    style D fill:#fdd,stroke:#333,stroke-width:2px
+    style E fill:#ddf,stroke:#333,stroke-width:2px
+```
 
 ## 📝 Logs
 

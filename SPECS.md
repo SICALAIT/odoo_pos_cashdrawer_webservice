@@ -25,16 +25,15 @@ Dans le cadre de l'utilisation du Point de Vente (POS) Odoo avec le module POS C
 ## 2. Analyse des besoins
 
 ### 2.1 Besoins utilisateurs
-```
-[Utilisateur Odoo]
-  ├── Interface HTTP simple
-  ├── Déploiement facile
-  └── Logs accessibles
-
-[Administrateur système]
-  ├── Installation simplifiée
-  ├── Configuration minimale
-  └── Maintenance facile
+```mermaid
+graph TD
+    A[Utilisateur Odoo] --> B[Interface HTTP simple]
+    A --> C[Déploiement facile]
+    A --> D[Logs accessibles]
+    
+    E[Administrateur système] --> F[Installation simplifiée]
+    E --> G[Configuration minimale]
+    E --> H[Maintenance facile]
 ```
 
 ### 2.2 Besoins fonctionnels
@@ -52,23 +51,26 @@ Dans le cadre de l'utilisation du Point de Vente (POS) Odoo avec le module POS C
 ## 3. Spécifications fonctionnelles
 
 ### 3.1 Endpoints API
-```
-+---------------------------+
-|   Webservice Local        |
-|   (localhost:22548)       |
-|                          |
-|   [/open-cash-drawer]     |
-|   - Méthode : GET         |
-|   - Ouvre le tiroir       |
-|                          |
-|   [/status]              |
-|   - Méthode : GET         |
-|   - Vérifie le service    |
-|                          |
-|   [/logs]                |
-|   - Méthode : GET         |
-|   - Télécharge les logs   |
-+---------------------------+
+```mermaid
+flowchart TB
+    A([Webservice :22548])
+    A --> B([open cash drawer])
+    A --> C([status])
+    A --> D([logs])
+    
+    B --> E([GET - Local uniquement])
+    E --> F([Ouvre le tiroir])
+    
+    C --> G([GET - Réseau])
+    G --> H([Vérifie le service])
+    
+    D --> I([GET - Réseau])
+    I --> J([Télécharge les logs])
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#fdd,stroke:#333,stroke-width:2px
+    style C fill:#dfd,stroke:#333,stroke-width:2px
+    style D fill:#dfd,stroke:#333,stroke-width:2px
 ```
 
 ### 3.2 Fonctionnalités principales
@@ -94,14 +96,14 @@ Dans le cadre de l'utilisation du Point de Vente (POS) Odoo avec le module POS C
 ## 4. Spécifications techniques
 
 ### 4.1 Architecture système
-```
-+----------------+     +------------------+     +---------------+
-|  Module Odoo   | --> | Webservice Flask | --> | Tiroir-caisse |
-|  POS Button    |     | (Port 22548)     |     | (ESC/POS)     |
-+----------------+     +------------------+     +---------------+
-      ^                       ^                      ^
-      |                       |                      |
-   HTTP GET               Python/Flask           Win32/ESC/POS
+```mermaid
+flowchart LR
+    A[Module Odoo<br>POS Button] -->|HTTP GET| B[Webservice Flask<br>Port 22548]
+    B -->|Win32/ESC/POS| C[Tiroir-caisse<br>ESC/POS]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style C fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 ### 4.2 Technologies utilisées
@@ -142,15 +144,20 @@ odoo_pos_cashdrawer_webservice/
 ```
 
 ### 5.2 Flux de données
-```
-+---------------+     +-----------------+     +------------------+
-| Requête HTTP  | --> | Traitement      | --> | Commande ESC/POS |
-| GET           |     | Flask           |     | Win32            |
-+---------------+     +-----------------+     +------------------+
-        |                      |                       |
-        v                      v                       v
-    Validation          Logs système              Ouverture
-    requête            (cashdrawer.log)          tiroir
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant W as Webservice Flask
+    participant L as Système de Logs
+    participant T as Tiroir-caisse
+
+    C->>W: Requête HTTP GET
+    W->>W: Validation requête
+    W->>L: Enregistrement log
+    W->>T: Commande ESC/POS
+    T-->>W: Confirmation
+    W-->>C: Réponse JSON
+    W->>L: Log résultat
 ```
 
 ## 6. Contraintes
