@@ -110,7 +110,15 @@ Les endpoints sont sécurisés :
 - `/open-cash-drawer` : Accessible uniquement en local
 - `/status` et `/logs` : Accessibles depuis le réseau
 
-Toutes les tentatives d'accès sont enregistrées dans les logs.
+Protocoles supportés :
+- HTTP et HTTPS : Le service accepte les requêtes en HTTP et HTTPS
+- Support des redirections HTTPS depuis Odoo
+- Le protocole utilisé est enregistré dans les logs
+
+Toutes les tentatives d'accès sont enregistrées dans les logs avec :
+- Adresse IP source
+- Protocole utilisé (HTTP/HTTPS)
+- Statut de la requête
 
 ## 🛠️ Support et Maintenance
 

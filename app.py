@@ -1,10 +1,12 @@
 from flask import Flask, jsonify, send_file, request
-from escpos.printer import Win32
+import win32print
+import win32ui
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 import os
 import platform
+from werkzeug.serving import WSGIRequestHandler
 
 # Configuration du logging
 if not os.path.exists('logs'):
@@ -30,18 +32,28 @@ def is_local_request():
     """Vérifie si la requête vient de localhost"""
     return request.remote_addr in ['127.0.0.1', 'localhost']
 
+# Commande ESC/POS pour ouvrir le tiroir-caisse
+OPEN_DRAWER_CMD = b'\x1b\x70\x00\x19\xfa'
+
 def open_cashdrawer():
     try:
         if platform.system() == 'Windows':
-            # Utilise l'imprimante nommée "TICKET" sous Windows
-            printer = Win32('TICKET')
+            printer_name = "TICKET"  # Nom de l'imprimante configurée
+            printer_handle = win32print.OpenPrinter(printer_name)
+            try:
+                # Démarrage du document d'impression
+                job = win32print.StartDocPrinter(printer_handle, 1, ("Open Cash Drawer", None, "RAW"))
+                win32print.StartPagePrinter(printer_handle)
+                # Envoyer la commande ESC/POS pour ouvrir le tiroir
+                win32print.WritePrinter(printer_handle, OPEN_DRAWER_CMD)
+                win32print.EndPagePrinter(printer_handle)
+                win32print.EndDocPrinter(printer_handle)
+                return True
+            finally:
+                win32print.ClosePrinter(printer_handle)
         else:
             logger.error("Ce service n'est compatible qu'avec Windows")
             return False
-            
-        printer.cashdraw(2)  # Ouvre le tiroir-caisse
-        printer.close()
-        return True
     except Exception as e:
         logger.error(f"Erreur lors de l'ouverture du tiroir: {str(e)}")
         return False
@@ -69,7 +81,8 @@ def status():
     return jsonify({
         "status": "running",
         "message": "Service actif",
-        "remote_addr": request.remote_addr
+        "remote_addr": request.remote_addr,
+        "scheme": request.scheme
     }), 200
 
 @app.route('/logs', methods=['GET'])
@@ -84,5 +97,16 @@ def get_logs():
 
 if __name__ == '__main__':
     logger.info("Démarrage du service tiroir-caisse")
-    # Écoute sur toutes les interfaces pour permettre l'accès distant aux logs
-    app.run(host='0.0.0.0', port=22548)
+    try:
+        # Configuration pour supporter HTTP et HTTPS
+        WSGIRequestHandler.protocol_version = "HTTP/1.1"  # Support HTTPS redirect
+        
+        # Écoute sur toutes les interfaces et accepte HTTP/HTTPS
+        app.run(
+            host='0.0.0.0', 
+            port=22548,
+            ssl_context=None  # Permet les requêtes HTTP et HTTPS
+        )
+        
+    except Exception as e:
+        logger.error(f"Erreur lors du démarrage du service: {str(e)}")

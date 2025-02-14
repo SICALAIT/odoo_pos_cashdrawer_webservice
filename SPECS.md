@@ -112,10 +112,12 @@ flowchart LR
   - Flask (webservice)
   - python-escpos (protocole ESC/POS)
   - logging (gestion des logs)
+  - werkzeug (gestion HTTP/HTTPS)
 
 - **Communication**
-  - HTTP (non-SSL, localhost uniquement)
+  - HTTP/HTTPS (support des deux protocoles)
   - ESC/POS (protocole imprimante)
+  - Support des redirections HTTPS
 
 - **Déploiement**
   - Script Python
@@ -174,6 +176,8 @@ sequenceDiagram
 - Logs asynchrones avec rotation
 - Conservation des logs pendant 30 jours
 - Gestion des erreurs robuste
+- Support des requêtes HTTP et HTTPS
+- Gestion des redirections HTTPS depuis Odoo
 
 ### 6.3 Contraintes d'exploitation
 - Installation simple
