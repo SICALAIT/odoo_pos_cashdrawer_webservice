@@ -18,17 +18,98 @@ pip install -r requirements.txt
 
 ## ⚙️ Configuration
 
-Le service est configuré pour utiliser l'imprimante nommée "TICKET" sous Windows, qui est le nom standard utilisé dans votre parc d'imprimantes.
+Le service utilise un fichier de configuration `config.ini` pour paramétrer l'imprimante et d'autres options.
 
-Si votre imprimante utilise un nom différent, vous pouvez le modifier dans le fichier `app.py` :
-```python
-printer = Win32('TICKET')  # Modifiez 'TICKET' par le nom de votre imprimante Windows
+### Fichier de configuration
+
+Le fichier `config.ini` contient les sections suivantes :
+
+```ini
+[printer]
+# Nom de l'imprimante configurée pour le tiroir-caisse
+name = TICKET
+
+[cashdrawer]
+# Commande ESC/POS pour ouvrir le tiroir-caisse (en hexadécimal)
+command = 1b70001afa
+
+[invoice_printer]
+# Nom de l'imprimante configurée pour les factures
+name = FACTURE
+# Dossier de téléchargement de Google Chrome à surveiller
+download_folder = C:/Users/Public/Downloads
+# Fréquence de scan du dossier en secondes
+scan_frequency = 5
+# Purger le dossier au premier lancement (true/false)
+purge_on_start = true
+# Extensions de fichiers à imprimer (séparées par des virgules)
+file_extensions = .pdf
+
+[server]
+# Port du serveur web
+port = 22548
+# Hôte du serveur web (0.0.0.0 pour toutes les interfaces)
+host = 0.0.0.0
+
+[logs]
+# Chemin du dossier des logs
+folder = logs
+# Nom du fichier de log
+filename = cashdrawer.log
+# Nombre de jours de conservation des logs
+retention_days = 30
+```
+
+### Configuration de l'imprimante tiroir-caisse
+
+Par défaut, le service est configuré pour utiliser l'imprimante nommée "TICKET" sous Windows, qui est le nom standard utilisé dans votre parc d'imprimantes.
+
+Si votre imprimante utilise un nom différent, vous pouvez le modifier dans le fichier `config.ini` :
+```ini
+[printer]
+name = NOM_DE_VOTRE_IMPRIMANTE
 ```
 
 Pour vérifier le nom de votre imprimante :
 1. Ouvrez les Paramètres Windows
 2. Allez dans Imprimantes et scanners
 3. Le nom affiché est celui à utiliser
+
+### Configuration de l'imprimante facture
+
+Le service inclut une fonctionnalité d'impression automatique des fichiers PDF téléchargés par Google Chrome. Cette fonctionnalité :
+
+- Surveille un dossier spécifique (par défaut, le dossier de téléchargement de Chrome)
+- Imprime automatiquement les fichiers PDF trouvés sur l'imprimante configurée
+- Supprime les fichiers après impression pour éviter les doublons
+- Purge le dossier au premier lancement (configurable)
+
+Vous pouvez configurer cette fonctionnalité dans la section `[invoice_printer]` du fichier `config.ini` :
+
+```ini
+[invoice_printer]
+# Activer/désactiver l'impression automatique
+autoprint = true
+# Nom de l'imprimante pour les factures
+name = FACTURE
+# Dossier à surveiller
+download_folder = C:/Users/Public/Downloads
+# Fréquence de scan en secondes
+scan_frequency = 5
+# Purger le dossier au démarrage
+purge_on_start = true
+# Extensions de fichiers à imprimer
+file_extensions = .pdf
+```
+
+Pour désactiver complètement la fonctionnalité d'impression automatique, vous pouvez définir `autoprint = false` dans la section `[invoice_printer]` du fichier `config.ini`. Cela empêchera le service de scanner le dossier et d'imprimer les fichiers, tout en gardant les autres fonctionnalités actives.
+
+#### Endpoints pour l'imprimante facture
+
+Le service expose deux endpoints supplémentaires pour l'imprimante facture :
+
+- `/invoice-printer/status` : Vérifie le statut de l'imprimante facture (accessible depuis le réseau)
+- `/invoice-printer/purge` : Purge le dossier de téléchargement (accessible uniquement en local)
 
 ## 🚀 Utilisation
 
