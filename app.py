@@ -27,7 +27,7 @@ except Exception as e:
     config['invoice_printer'] = {
         'autoprint': 'true',
         'name': 'FACTURE',
-        'download_folder': 'C:/Users/Public/Downloads',
+        'download_folder': 'C:\\Users\\Public\\Downloads',
         'scan_frequency': '5',
         'purge_on_start': 'true',
         'file_extensions': '.pdf'
@@ -37,24 +37,43 @@ except Exception as e:
 
 # Configuration du logging
 log_folder = config.get('logs', 'folder', fallback='logs')
-if not os.path.exists(log_folder):
-    os.makedirs(log_folder)
+try:
+    if not os.path.exists(log_folder):
+        os.makedirs(log_folder, exist_ok=True)
+        print(f"Dossier de logs créé: {log_folder}")
+except Exception as e:
+    print(f"Erreur lors de la création du dossier de logs: {str(e)}")
 
 # Configuration du logger avec rotation
 log_filename = config.get('logs', 'filename', fallback='cashdrawer.log')
 log_file = os.path.join(log_folder, log_filename)
 retention_days = int(config.get('logs', 'retention_days', fallback='30'))
-handler = TimedRotatingFileHandler(
-    log_file,
-    when="midnight",
-    interval=1,
-    backupCount=retention_days
-)
-handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 
+# Création du logger
 logger = logging.getLogger('cashdrawer')
 logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+
+# Vérification si le logger a déjà des handlers pour éviter les doublons
+if not logger.handlers:
+    try:
+        # Handler pour fichier avec rotation
+        file_handler = TimedRotatingFileHandler(
+            log_file,
+            when="midnight",
+            interval=1,
+            backupCount=retention_days
+        )
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+        print(f"Handler de fichier configuré: {log_file}")
+        
+        # Ajout d'un handler console pour voir les logs en temps réel
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(console_handler)
+        print("Handler console configuré")
+    except Exception as e:
+        print(f"Erreur lors de la configuration des handlers de log: {str(e)}")
 
 app = Flask(__name__)
 
@@ -125,28 +144,60 @@ def status():
 def get_logs():
     """Endpoint pour récupérer le fichier de logs"""
     try:
+        # Vérification que le fichier de logs existe
+        if not os.path.exists(log_file):
+            logger.error(f"Fichier de logs introuvable: {log_file}")
+            return jsonify({"status": "error", "message": f"Fichier de logs introuvable: {log_file}"}), 404
+            
+        # Vérification des permissions
+        if not os.access(log_file, os.R_OK):
+            logger.error(f"Permissions insuffisantes pour lire le fichier de logs: {log_file}")
+            return jsonify({"status": "error", "message": "Permissions insuffisantes pour accéder aux logs"}), 403
+            
         logger.info(f"Téléchargement des logs depuis {request.remote_addr}")
         return send_file(log_file, as_attachment=True, download_name='cashdrawer.log')
     except Exception as e:
         logger.error(f"Erreur lors de l'accès aux logs: {str(e)}")
-        return jsonify({"status": "error", "message": "Impossible d'accéder aux logs"}), 500
+        return jsonify({"status": "error", "message": f"Impossible d'accéder aux logs: {str(e)}"}), 500
 
 # Fonction pour imprimer un fichier PDF
 def print_pdf_file(file_path, printer_name):
     try:
+        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante: {printer_name}")
+        
+        # Normalisation du chemin Windows
+        if file_path.startswith('C:/'):
+            file_path = file_path.replace('/', '\\')
+            logger.info(f"Normalisation du chemin Windows du fichier: {file_path}")
+        
+        # Vérification que le fichier existe
+        if not os.path.exists(file_path):
+            logger.error(f"Fichier introuvable: {file_path}")
+            return False
+            
+        # Vérification des permissions
+        if not os.access(file_path, os.R_OK):
+            logger.error(f"Permissions insuffisantes pour lire le fichier: {file_path}")
+            return False
+            
         if platform.system() == 'Windows':
-            win32api.ShellExecute(
-                0,
-                "print",
-                file_path,
-                f'/d:"{printer_name}"',
-                ".",
-                0
-            )
-            logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name}")
-            return True
+            logger.info(f"Impression sous Windows avec win32api.ShellExecute")
+            try:
+                win32api.ShellExecute(
+                    0,
+                    "print",
+                    file_path,
+                    f'/d:"{printer_name}"',
+                    ".",
+                    0
+                )
+                logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name}")
+                return True
+            except Exception as e:
+                logger.error(f"Erreur lors de l'impression avec win32api.ShellExecute: {str(e)}")
+                return False
         else:
-            logger.error("L'impression de PDF n'est compatible qu'avec Windows")
+            logger.error(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}")
             return False
     except Exception as e:
         logger.error(f"Erreur lors de l'impression du fichier {file_path}: {str(e)}")
@@ -155,12 +206,38 @@ def print_pdf_file(file_path, printer_name):
 # Fonction pour purger un dossier
 def purge_folder(folder_path, extensions):
     try:
+        logger.info(f"Tentative de purge du dossier: {folder_path} pour les extensions: {extensions}")
+        
+        # Normalisation du chemin Windows
+        if folder_path.startswith('C:/'):
+            folder_path = folder_path.replace('/', '\\')
+            logger.info(f"Normalisation du chemin Windows du dossier: {folder_path}")
+        
+        # Vérification que le dossier existe
+        if not os.path.exists(folder_path):
+            logger.error(f"Dossier introuvable: {folder_path}")
+            return False
+            
+        # Vérification des permissions
+        if not os.access(folder_path, os.R_OK | os.W_OK):
+            logger.error(f"Permissions insuffisantes pour accéder au dossier: {folder_path}")
+            return False
+            
         count = 0
         for ext in extensions:
+            logger.debug(f"Recherche des fichiers avec extension: {ext}")
             files = glob.glob(os.path.join(folder_path, f"*{ext}"))
+            logger.info(f"Nombre de fichiers trouvés avec extension {ext}: {len(files)}")
+            
             for file in files:
-                os.remove(file)
-                count += 1
+                try:
+                    logger.debug(f"Tentative de suppression du fichier: {file}")
+                    os.remove(file)
+                    logger.info(f"Fichier supprimé: {file}")
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Erreur lors de la suppression du fichier {file}: {str(e)}")
+                    
         logger.info(f"Purge du dossier {folder_path}: {count} fichiers supprimés")
         return True
     except Exception as e:
@@ -169,50 +246,109 @@ def purge_folder(folder_path, extensions):
 
 # Fonction pour scanner le dossier de téléchargement et imprimer les PDF
 def scan_and_print_pdfs():
+    logger.info("Démarrage de la fonction scan_and_print_pdfs")
+    
     # Récupération des paramètres de configuration
     printer_name = config.get('invoice_printer', 'name', fallback='FACTURE')
     download_folder = config.get('invoice_printer', 'download_folder', fallback='C:/Users/Public/Downloads')
+    
+    # Normalisation du chemin Windows
+    if download_folder.startswith('C:/'):
+        # Remplacer les slashes par des backslashes
+        download_folder = download_folder.replace('/', '\\')
+        logger.info(f"Normalisation du chemin Windows: {download_folder}")
+    
     scan_frequency = int(config.get('invoice_printer', 'scan_frequency', fallback='5'))
     purge_on_start = config.getboolean('invoice_printer', 'purge_on_start', fallback=True)
     file_extensions_str = config.get('invoice_printer', 'file_extensions', fallback='.pdf')
     file_extensions = [ext.strip() for ext in file_extensions_str.split(',')]
     
+    logger.info(f"Configuration: printer_name={printer_name}, download_folder={download_folder}, " +
+                f"scan_frequency={scan_frequency}, purge_on_start={purge_on_start}, " +
+                f"file_extensions={file_extensions}")
+    
     # Vérification que le dossier existe
     if not os.path.exists(download_folder):
         try:
-            os.makedirs(download_folder)
+            os.makedirs(download_folder, exist_ok=True)
             logger.info(f"Dossier {download_folder} créé avec succès")
         except Exception as e:
             logger.error(f"Erreur lors de la création du dossier {download_folder}: {str(e)}")
             return
     
+    # Vérification des permissions du dossier
+    if not os.access(download_folder, os.R_OK | os.W_OK):
+        logger.error(f"Permissions insuffisantes pour accéder au dossier: {download_folder}")
+        return
+    
     # Purge du dossier au premier lancement si configuré
     if purge_on_start:
-        purge_folder(download_folder, file_extensions)
+        logger.info(f"Purge du dossier au démarrage: {download_folder}")
+        purge_result = purge_folder(download_folder, file_extensions)
+        logger.info(f"Résultat de la purge: {purge_result}")
     
     logger.info(f"Démarrage du scanner d'impression pour {printer_name} dans {download_folder}")
+    
+    # Compteurs pour les statistiques
+    scan_count = 0
+    print_success_count = 0
+    print_fail_count = 0
+    delete_success_count = 0
+    delete_fail_count = 0
     
     # Boucle principale de scan
     while True:
         try:
+            scan_count += 1
+            logger.info(f"Scan #{scan_count} du dossier {download_folder}")
+            
+            files_found = False
             for ext in file_extensions:
                 files = glob.glob(os.path.join(download_folder, f"*{ext}"))
-                for file in files:
-                    # Impression du fichier
-                    success = print_pdf_file(file, printer_name)
+                
+                if files:
+                    files_found = True
+                    logger.info(f"Fichiers trouvés avec extension {ext}: {len(files)}")
                     
-                    # Suppression du fichier après impression
-                    if success:
-                        try:
-                            os.remove(file)
-                            logger.info(f"Fichier {file} supprimé après impression")
-                        except Exception as e:
-                            logger.error(f"Erreur lors de la suppression du fichier {file}: {str(e)}")
+                    for file in files:
+                        logger.info(f"Traitement du fichier: {file}")
+                        
+                        # Impression du fichier
+                        success = print_pdf_file(file, printer_name)
+                        
+                        if success:
+                            print_success_count += 1
+                            logger.info(f"Impression réussie: {file} (Total réussi: {print_success_count})")
+                            
+                            # Suppression du fichier après impression
+                            try:
+                                os.remove(file)
+                                delete_success_count += 1
+                                logger.info(f"Fichier {file} supprimé après impression (Total supprimé: {delete_success_count})")
+                            except Exception as e:
+                                delete_fail_count += 1
+                                logger.error(f"Erreur lors de la suppression du fichier {file}: {str(e)} (Total échecs suppression: {delete_fail_count})")
+                        else:
+                            print_fail_count += 1
+                            logger.error(f"Échec de l'impression: {file} (Total échecs: {print_fail_count})")
+            
+            if not files_found:
+                logger.info(f"Aucun fichier trouvé lors du scan #{scan_count}")
+            
+            # Statistiques périodiques (tous les 10 scans)
+            if scan_count % 10 == 0:
+                logger.info(f"Statistiques après {scan_count} scans: " +
+                           f"Impressions réussies: {print_success_count}, " +
+                           f"Impressions échouées: {print_fail_count}, " +
+                           f"Suppressions réussies: {delete_success_count}, " +
+                           f"Suppressions échouées: {delete_fail_count}")
             
             # Attente avant le prochain scan
+            logger.debug(f"Attente de {scan_frequency} secondes avant le prochain scan")
             time.sleep(scan_frequency)
         except Exception as e:
             logger.error(f"Erreur lors du scan du dossier {download_folder}: {str(e)}")
+            logger.info(f"Reprise du scan dans {scan_frequency} secondes")
             time.sleep(scan_frequency)
 
 @app.route('/invoice-printer/status', methods=['GET'])
@@ -221,6 +357,11 @@ def invoice_printer_status():
     autoprint_enabled = config.getboolean('invoice_printer', 'autoprint', fallback=True)
     printer_name = config.get('invoice_printer', 'name', fallback='FACTURE')
     download_folder = config.get('invoice_printer', 'download_folder', fallback='C:/Users/Public/Downloads')
+    
+    # Normalisation du chemin Windows pour l'affichage
+    if download_folder.startswith('C:/'):
+        download_folder = download_folder.replace('/', '\\')
+        
     scan_frequency = config.get('invoice_printer', 'scan_frequency', fallback='5')
     
     return jsonify({
@@ -242,6 +383,12 @@ def invoice_printer_purge():
         return jsonify({"status": "error", "message": "Accès refusé - Local uniquement"}), 403
     
     download_folder = config.get('invoice_printer', 'download_folder', fallback='C:/Users/Public/Downloads')
+    
+    # Normalisation du chemin Windows
+    if download_folder.startswith('C:/'):
+        download_folder = download_folder.replace('/', '\\')
+        logger.info(f"Normalisation du chemin Windows pour la purge: {download_folder}")
+        
     file_extensions_str = config.get('invoice_printer', 'file_extensions', fallback='.pdf')
     file_extensions = [ext.strip() for ext in file_extensions_str.split(',')]
     
@@ -259,12 +406,26 @@ def invoice_printer_purge():
         }), 500
 
 if __name__ == '__main__':
+    print("Démarrage du service tiroir-caisse")
     logger.info("Démarrage du service tiroir-caisse")
+    
+    # Affichage des informations système
+    system_info = f"Système d'exploitation: {platform.system()} {platform.release()}"
+    print(system_info)
+    logger.info(system_info)
+    
+    # Affichage du chemin du dossier de logs
+    log_info = f"Dossier de logs: {os.path.abspath(log_folder)}, Fichier: {log_file}"
+    print(log_info)
+    logger.info(log_info)
+    
     try:
         # Vérification si l'impression automatique est activée
         autoprint_enabled = config.getboolean('invoice_printer', 'autoprint', fallback=True)
         
         if autoprint_enabled:
+            logger.info("Impression automatique activée dans la configuration")
+            
             # Démarrage du thread de scan des PDF
             pdf_scanner_thread = threading.Thread(target=scan_and_print_pdfs, daemon=True)
             pdf_scanner_thread.start()
@@ -279,11 +440,16 @@ if __name__ == '__main__':
         host = config.get('server', 'host', fallback='0.0.0.0')
         port = int(config.get('server', 'port', fallback='22548'))
         
+        logger.info(f"Démarrage du serveur web sur {host}:{port}")
+        
         app.run(
             host=host, 
             port=port,
-            ssl_context=None  # Permet les requêtes HTTP et HTTPS
+            ssl_context=None,  # Permet les requêtes HTTP et HTTPS
+            debug=False
         )
         
     except Exception as e:
-        logger.error(f"Erreur lors du démarrage du service: {str(e)}")
+        error_msg = f"Erreur lors du démarrage du service: {str(e)}"
+        print(error_msg)
+        logger.error(error_msg)

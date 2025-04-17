@@ -13,6 +13,14 @@ if not os.path.exists('config.ini'):
     config = configparser.ConfigParser()
     config['printer'] = {'name': 'TICKET'}
     config['cashdrawer'] = {'command': '1b70001afa'}
+    config['invoice_printer'] = {
+        'autoprint': 'true',
+        'name': 'FACTURE',
+        'download_folder': 'C:\\Users\\Public\\Downloads',
+        'scan_frequency': '5',
+        'purge_on_start': 'true',
+        'file_extensions': '.pdf'
+    }
     config['server'] = {'port': '22548', 'host': '0.0.0.0'}
     config['logs'] = {'folder': 'logs', 'filename': 'cashdrawer.log', 'retention_days': '30'}
     
