@@ -181,20 +181,84 @@ def print_pdf_file(file_path, printer_name):
             return False
             
         if platform.system() == 'Windows':
-            logger.info(f"Impression sous Windows avec win32api.ShellExecute")
+            # Essayer plusieurs méthodes d'impression
             try:
-                win32api.ShellExecute(
-                    0,
-                    "print",
-                    file_path,
-                    f'/d:"{printer_name}"',
-                    ".",
-                    0
-                )
-                logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name}")
-                return True
+                # Méthode 1: Utiliser win32print directement
+                logger.info(f"Tentative d'impression avec win32print (méthode 1)")
+                
+                try:
+                    # Ouvrir l'imprimante
+                    printer_handle = win32print.OpenPrinter(printer_name)
+                    
+                    try:
+                        # Créer un job d'impression
+                        job = win32print.StartDocPrinter(printer_handle, 1, (os.path.basename(file_path), None, "RAW"))
+                        
+                        try:
+                            # Lire le fichier PDF
+                            with open(file_path, 'rb') as f:
+                                data = f.read()
+                            
+                            # Démarrer une page
+                            win32print.StartPagePrinter(printer_handle)
+                            
+                            # Envoyer les données à l'imprimante
+                            win32print.WritePrinter(printer_handle, data)
+                            
+                            # Terminer la page
+                            win32print.EndPagePrinter(printer_handle)
+                            
+                            logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name} avec win32print")
+                            return True
+                        finally:
+                            # Terminer le job d'impression
+                            win32print.EndDocPrinter(printer_handle)
+                    finally:
+                        # Fermer l'imprimante
+                        win32print.ClosePrinter(printer_handle)
+                except Exception as e:
+                    logger.warning(f"Échec de la méthode 1 (win32print): {str(e)}")
+                    
+                # Méthode 2: Utiliser ShellExecute
+                logger.info(f"Tentative d'impression avec win32api.ShellExecute (méthode 2)")
+                try:
+                    win32api.ShellExecute(
+                        0,
+                        "print",
+                        file_path,
+                        f'/d:"{printer_name}"',
+                        ".",
+                        0
+                    )
+                    logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name} avec ShellExecute")
+                    return True
+                except Exception as e:
+                    logger.warning(f"Échec de la méthode 2 (ShellExecute): {str(e)}")
+                
+                # Méthode 3: Utiliser une commande système
+                logger.info(f"Tentative d'impression avec commande système (méthode 3)")
+                try:
+                    import subprocess
+                    # Utiliser la commande système pour imprimer
+                    cmd = f'print /d:"{printer_name}" "{file_path}"'
+                    logger.info(f"Exécution de la commande: {cmd}")
+                    
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name} avec commande système")
+                        return True
+                    else:
+                        logger.warning(f"Échec de la méthode 3 (commande système): {result.stderr}")
+                except Exception as e:
+                    logger.warning(f"Échec de la méthode 3 (commande système): {str(e)}")
+                
+                # Si toutes les méthodes ont échoué
+                logger.error(f"Toutes les méthodes d'impression ont échoué pour le fichier {file_path}")
+                return False
+                
             except Exception as e:
-                logger.error(f"Erreur lors de l'impression avec win32api.ShellExecute: {str(e)}")
+                logger.error(f"Erreur générale lors de l'impression: {str(e)}")
                 return False
         else:
             logger.error(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}")
