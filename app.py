@@ -53,6 +53,18 @@ retention_days = int(config.get('logs', 'retention_days', fallback='30'))
 logger = logging.getLogger('cashdrawer')
 logger.setLevel(logging.INFO)
 
+# Dictionnaire pour suivre les erreurs déjà enregistrées
+error_cache = {}
+# Fonction pour éviter de répéter les mêmes erreurs dans les logs
+def log_error_once(message, error_type="general"):
+    """Enregistre une erreur une seule fois jusqu'à ce qu'elle soit résolue"""
+    error_key = f"{error_type}:{message}"
+    if error_key not in error_cache:
+        logger.error(message)
+        error_cache[error_key] = True
+        return True
+    return False
+
 # Vérification si le logger a déjà des handlers pour éviter les doublons
 if not logger.handlers:
     try:
@@ -86,7 +98,7 @@ drawer_cmd_hex = config.get('cashdrawer', 'command', fallback='1b70001afa')
 try:
     OPEN_DRAWER_CMD = binascii.unhexlify(drawer_cmd_hex)
 except Exception as e:
-    logger.error(f"Erreur lors de la conversion de la commande du tiroir-caisse: {str(e)}")
+    log_error_once(f"Erreur lors de la conversion de la commande du tiroir-caisse: {str(e)}", "drawer_cmd_conversion_error")
     # Valeur par défaut si la conversion échoue
     OPEN_DRAWER_CMD = b'\x1b\x70\x00\x19\xfa'
 
@@ -107,17 +119,17 @@ def open_cashdrawer():
             finally:
                 win32print.ClosePrinter(printer_handle)
         else:
-            logger.error("Ce service n'est compatible qu'avec Windows")
+            log_error_once("Ce service n'est compatible qu'avec Windows", "os_not_windows")
             return False
     except Exception as e:
-        logger.error(f"Erreur lors de l'ouverture du tiroir: {str(e)}")
+        log_error_once(f"Erreur lors de l'ouverture du tiroir: {str(e)}", "open_drawer_error")
         return False
 
 @app.route('/open-cash-drawer', methods=['GET'])
 def open_drawer():
     # Vérification que la requête vient de localhost
     if not is_local_request():
-        logger.warning(f"Tentative d'accès distant à l'ouverture du tiroir depuis {request.remote_addr}")
+        log_error_once(f"Tentative d'accès distant à l'ouverture du tiroir depuis {request.remote_addr}", "remote_access_drawer")
         return jsonify({"status": "error", "message": "Accès refusé - Local uniquement"}), 403
 
     try:
@@ -128,7 +140,7 @@ def open_drawer():
         else:
             return jsonify({"status": "error", "message": "Erreur lors de l'ouverture du tiroir"}), 500
     except Exception as e:
-        logger.error(f"Erreur serveur: {str(e)}")
+        log_error_once(f"Erreur serveur: {str(e)}", "server_error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/status', methods=['GET'])
@@ -146,18 +158,18 @@ def get_logs():
     try:
         # Vérification que le fichier de logs existe
         if not os.path.exists(log_file):
-            logger.error(f"Fichier de logs introuvable: {log_file}")
+            log_error_once(f"Fichier de logs introuvable: {log_file}", "logs_file_not_found")
             return jsonify({"status": "error", "message": f"Fichier de logs introuvable: {log_file}"}), 404
             
         # Vérification des permissions
         if not os.access(log_file, os.R_OK):
-            logger.error(f"Permissions insuffisantes pour lire le fichier de logs: {log_file}")
+            log_error_once(f"Permissions insuffisantes pour lire le fichier de logs: {log_file}", "logs_file_permission")
             return jsonify({"status": "error", "message": "Permissions insuffisantes pour accéder aux logs"}), 403
             
         logger.info(f"Téléchargement des logs depuis {request.remote_addr}")
         return send_file(log_file, as_attachment=True, download_name='cashdrawer.log')
     except Exception as e:
-        logger.error(f"Erreur lors de l'accès aux logs: {str(e)}")
+        log_error_once(f"Erreur lors de l'accès aux logs: {str(e)}", "logs_access_error")
         return jsonify({"status": "error", "message": f"Impossible d'accéder aux logs: {str(e)}"}), 500
 
 # Fonction pour imprimer un fichier PDF
@@ -172,12 +184,12 @@ def print_pdf_file(file_path, printer_name):
         
         # Vérification que le fichier existe
         if not os.path.exists(file_path):
-            logger.error(f"Fichier introuvable: {file_path}")
+            log_error_once(f"Fichier introuvable: {file_path}", f"file_not_found_{file_path}")
             return False
             
         # Vérification des permissions
         if not os.access(file_path, os.R_OK):
-            logger.error(f"Permissions insuffisantes pour lire le fichier: {file_path}")
+            log_error_once(f"Permissions insuffisantes pour lire le fichier: {file_path}", f"file_permission_{file_path}")
             return False
             
         if platform.system() == 'Windows':
@@ -254,17 +266,17 @@ def print_pdf_file(file_path, printer_name):
                     logger.warning(f"Échec de la méthode 3 (commande système): {str(e)}")
                 
                 # Si toutes les méthodes ont échoué
-                logger.error(f"Toutes les méthodes d'impression ont échoué pour le fichier {file_path}")
+                log_error_once(f"Toutes les méthodes d'impression ont échoué pour le fichier {file_path}", f"all_print_methods_failed_{file_path}")
                 return False
                 
             except Exception as e:
-                logger.error(f"Erreur générale lors de l'impression: {str(e)}")
+                log_error_once(f"Erreur générale lors de l'impression: {str(e)}", "general_print_error")
                 return False
         else:
-            logger.error(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}")
+            log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "print_os_not_windows")
             return False
     except Exception as e:
-        logger.error(f"Erreur lors de l'impression du fichier {file_path}: {str(e)}")
+        log_error_once(f"Erreur lors de l'impression du fichier {file_path}: {str(e)}", f"print_file_error_{file_path}")
         return False
 
 # Fonction pour purger un dossier
@@ -279,12 +291,12 @@ def purge_folder(folder_path, extensions):
         
         # Vérification que le dossier existe
         if not os.path.exists(folder_path):
-            logger.error(f"Dossier introuvable: {folder_path}")
+            log_error_once(f"Dossier introuvable: {folder_path}", f"folder_not_found_{folder_path}")
             return False
             
         # Vérification des permissions
         if not os.access(folder_path, os.R_OK | os.W_OK):
-            logger.error(f"Permissions insuffisantes pour accéder au dossier: {folder_path}")
+            log_error_once(f"Permissions insuffisantes pour accéder au dossier: {folder_path}", f"folder_permission_{folder_path}")
             return False
             
         count = 0
@@ -300,12 +312,12 @@ def purge_folder(folder_path, extensions):
                     logger.info(f"Fichier supprimé: {file}")
                     count += 1
                 except Exception as e:
-                    logger.error(f"Erreur lors de la suppression du fichier {file}: {str(e)}")
+                    log_error_once(f"Erreur lors de la suppression du fichier {file}: {str(e)}", f"purge_error_{file}")
                     
         logger.info(f"Purge du dossier {folder_path}: {count} fichiers supprimés")
         return True
     except Exception as e:
-        logger.error(f"Erreur lors de la purge du dossier {folder_path}: {str(e)}")
+        log_error_once(f"Erreur lors de la purge du dossier {folder_path}: {str(e)}", f"purge_folder_error_{folder_path}")
         return False
 
 # Fonction pour scanner le dossier de téléchargement et imprimer les PDF
@@ -337,12 +349,12 @@ def scan_and_print_pdfs():
             os.makedirs(download_folder, exist_ok=True)
             logger.info(f"Dossier {download_folder} créé avec succès")
         except Exception as e:
-            logger.error(f"Erreur lors de la création du dossier {download_folder}: {str(e)}")
+            log_error_once(f"Erreur lors de la création du dossier {download_folder}: {str(e)}", f"create_folder_error_{download_folder}")
             return
     
     # Vérification des permissions du dossier
     if not os.access(download_folder, os.R_OK | os.W_OK):
-        logger.error(f"Permissions insuffisantes pour accéder au dossier: {download_folder}")
+        log_error_once(f"Permissions insuffisantes pour accéder au dossier: {download_folder}", f"scan_folder_permission_{download_folder}")
         return
     
     # Purge du dossier au premier lancement si configuré
@@ -364,7 +376,8 @@ def scan_and_print_pdfs():
     while True:
         try:
             scan_count += 1
-            logger.info(f"Scan #{scan_count} du dossier {download_folder}")
+            # Log de scan uniquement en mode debug pour éviter de surcharger les logs
+            logger.debug(f"Scan #{scan_count} du dossier {download_folder}")
             
             files_found = False
             for ext in file_extensions:
@@ -391,16 +404,15 @@ def scan_and_print_pdfs():
                                 logger.info(f"Fichier {file} supprimé après impression (Total supprimé: {delete_success_count})")
                             except Exception as e:
                                 delete_fail_count += 1
-                                logger.error(f"Erreur lors de la suppression du fichier {file}: {str(e)} (Total échecs suppression: {delete_fail_count})")
+                                log_error_once(f"Erreur lors de la suppression du fichier {file}: {str(e)}", f"delete_error_{file}")
                         else:
                             print_fail_count += 1
-                            logger.error(f"Échec de l'impression: {file} (Total échecs: {print_fail_count})")
+                            log_error_once(f"Échec de l'impression: {file}", f"print_error_{file}")
             
-            if not files_found:
-                logger.info(f"Aucun fichier trouvé lors du scan #{scan_count}")
+            # Ne pas logger les scans sans fichiers pour éviter de surcharger les logs
             
-            # Statistiques périodiques (tous les 10 scans)
-            if scan_count % 10 == 0:
+            # Statistiques périodiques (tous les 100 scans au lieu de 10)
+            if scan_count % 100 == 0:
                 logger.info(f"Statistiques après {scan_count} scans: " +
                            f"Impressions réussies: {print_success_count}, " +
                            f"Impressions échouées: {print_fail_count}, " +
@@ -411,8 +423,9 @@ def scan_and_print_pdfs():
             logger.debug(f"Attente de {scan_frequency} secondes avant le prochain scan")
             time.sleep(scan_frequency)
         except Exception as e:
-            logger.error(f"Erreur lors du scan du dossier {download_folder}: {str(e)}")
-            logger.info(f"Reprise du scan dans {scan_frequency} secondes")
+            # Utiliser la fonction log_error_once pour éviter de répéter la même erreur
+            if log_error_once(f"Erreur lors du scan du dossier {download_folder}: {str(e)}", "scan_error"):
+                logger.info(f"Reprise du scan dans {scan_frequency} secondes")
             time.sleep(scan_frequency)
 
 @app.route('/invoice-printer/status', methods=['GET'])
@@ -443,7 +456,7 @@ def invoice_printer_purge():
     """Endpoint pour purger le dossier de téléchargement"""
     # Vérification que la requête vient de localhost
     if not is_local_request():
-        logger.warning(f"Tentative d'accès distant à la purge du dossier depuis {request.remote_addr}")
+        log_error_once(f"Tentative d'accès distant à la purge du dossier depuis {request.remote_addr}", "remote_access_purge")
         return jsonify({"status": "error", "message": "Accès refusé - Local uniquement"}), 403
     
     download_folder = config.get('invoice_printer', 'download_folder', fallback='C:/Users/Public/Downloads')
@@ -516,4 +529,4 @@ if __name__ == '__main__':
     except Exception as e:
         error_msg = f"Erreur lors du démarrage du service: {str(e)}"
         print(error_msg)
-        logger.error(error_msg)
+        log_error_once(error_msg, "startup_error")
