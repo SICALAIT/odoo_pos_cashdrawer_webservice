@@ -6,7 +6,7 @@ import logging
 import bcrypt
 import secrets
 from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import platform
 import configparser
@@ -94,7 +94,7 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Génère une clé secrète aléatoire
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=1)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
 
 # Fonctions d'authentification
 def is_first_setup():
