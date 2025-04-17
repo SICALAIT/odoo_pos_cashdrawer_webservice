@@ -75,34 +75,38 @@ Pour vérifier le nom de votre imprimante :
 2. Allez dans Imprimantes et scanners
 3. Le nom affiché est celui à utiliser
 
-### Configuration de l'imprimante facture
+### Configuration de l'ouverture automatique des PDF
 
-Le service inclut une fonctionnalité d'impression automatique des fichiers PDF téléchargés par Google Chrome. Cette fonctionnalité :
+Le service inclut une fonctionnalité d'ouverture automatique des fichiers PDF téléchargés par Google Chrome. Cette fonctionnalité :
 
 - Surveille un dossier spécifique (par défaut, le dossier de téléchargement de Chrome)
-- Imprime automatiquement les fichiers PDF trouvés sur l'imprimante configurée
-- Supprime les fichiers après impression pour éviter les doublons
+- Ouvre automatiquement les fichiers PDF trouvés avec l'application par défaut du système
+- Supprime les fichiers après ouverture pour éviter les doublons
 - Purge le dossier au premier lancement (configurable)
+
+Cette approche permet à l'utilisateur de visualiser le PDF et de choisir d'imprimer manuellement si nécessaire.
 
 Vous pouvez configurer cette fonctionnalité dans la section `[invoice_printer]` du fichier `config.ini` :
 
 ```ini
 [invoice_printer]
-# Activer/désactiver l'impression automatique
+# Activer/désactiver l'ouverture automatique
 autoprint = true
-# Nom de l'imprimante pour les factures
+# Nom de l'imprimante (utilisé uniquement pour les logs)
 name = FACTURE
 # Dossier à surveiller
 download_folder = C:/Users/Public/Downloads
 # Fréquence de scan en secondes
 scan_frequency = 5
+# Délai en secondes avant suppression du fichier après ouverture
+open_delay = 10
 # Purger le dossier au démarrage
 purge_on_start = true
-# Extensions de fichiers à imprimer
+# Extensions de fichiers à ouvrir
 file_extensions = .pdf
 ```
 
-Pour désactiver complètement la fonctionnalité d'impression automatique, vous pouvez définir `autoprint = false` dans la section `[invoice_printer]` du fichier `config.ini`. Cela empêchera le service de scanner le dossier et d'imprimer les fichiers, tout en gardant les autres fonctionnalités actives.
+Pour désactiver complètement la fonctionnalité d'ouverture automatique, vous pouvez définir `autoprint = false` dans la section `[invoice_printer]` du fichier `config.ini`. Cela empêchera le service de scanner le dossier et d'ouvrir les fichiers, tout en gardant les autres fonctionnalités actives.
 
 #### Endpoints pour l'imprimante facture
 

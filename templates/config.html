@@ -162,6 +162,13 @@
                         </div>
                     </div>
                     <div class="field">
+                        <label class="label">Délai avant suppression (secondes)</label>
+                        <div class="control">
+                            <input class="input" type="number" name="open_delay" value="{{ config.get('invoice_printer', 'open_delay', fallback='10') }}" min="1">
+                        </div>
+                        <p class="help">Délai d'attente après ouverture du PDF avant sa suppression</p>
+                    </div>
+                    <div class="field">
                         <label class="label">Purger au démarrage</label>
                         <div class="control">
                             <label class="checkbox">

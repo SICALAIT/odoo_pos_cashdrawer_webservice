@@ -18,6 +18,7 @@ if not os.path.exists('config.ini'):
         'name': 'FACTURE',
         'download_folder': 'C:\\Users\\Public\\Downloads',
         'scan_frequency': '5',
+        'open_delay': '10',
         'purge_on_start': 'true',
         'file_extensions': '.pdf'
     }

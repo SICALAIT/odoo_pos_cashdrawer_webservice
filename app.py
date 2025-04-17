@@ -242,10 +242,10 @@ def get_logs():
         log_error_once(f"Erreur lors de l'accès aux logs: {str(e)}", "logs_access_error")
         return jsonify({"status": "error", "message": f"Impossible d'accéder aux logs: {str(e)}"}), 500
 
-# Fonction pour imprimer un fichier PDF
+# Fonction pour ouvrir un fichier PDF avec le lecteur par défaut
 def print_pdf_file(file_path, printer_name):
     try:
-        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante: {printer_name}")
+        logger.info(f"Tentative d'ouverture du fichier: {file_path} (au lieu de l'impression sur {printer_name})")
         
         # Normalisation du chemin Windows
         if file_path.startswith('C:/'):
@@ -263,90 +263,27 @@ def print_pdf_file(file_path, printer_name):
             return False
             
         if platform.system() == 'Windows':
-            # Essayer plusieurs méthodes d'impression
             try:
-                # Méthode 1: Utiliser win32print directement
-                logger.info(f"Tentative d'impression avec win32print (méthode 1)")
-                
-                try:
-                    # Ouvrir l'imprimante
-                    printer_handle = win32print.OpenPrinter(printer_name)
-                    
-                    try:
-                        # Créer un job d'impression
-                        job = win32print.StartDocPrinter(printer_handle, 1, (os.path.basename(file_path), None, "RAW"))
-                        
-                        try:
-                            # Lire le fichier PDF
-                            with open(file_path, 'rb') as f:
-                                data = f.read()
-                            
-                            # Démarrer une page
-                            win32print.StartPagePrinter(printer_handle)
-                            
-                            # Envoyer les données à l'imprimante
-                            win32print.WritePrinter(printer_handle, data)
-                            
-                            # Terminer la page
-                            win32print.EndPagePrinter(printer_handle)
-                            
-                            logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name} avec win32print")
-                            return True
-                        finally:
-                            # Terminer le job d'impression
-                            win32print.EndDocPrinter(printer_handle)
-                    finally:
-                        # Fermer l'imprimante
-                        win32print.ClosePrinter(printer_handle)
-                except Exception as e:
-                    logger.warning(f"Échec de la méthode 1 (win32print): {str(e)}")
-                    
-                # Méthode 2: Utiliser ShellExecute
-                logger.info(f"Tentative d'impression avec win32api.ShellExecute (méthode 2)")
-                try:
-                    win32api.ShellExecute(
-                        0,
-                        "print",
-                        file_path,
-                        f'/d:"{printer_name}"',
-                        ".",
-                        0
-                    )
-                    logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name} avec ShellExecute")
-                    return True
-                except Exception as e:
-                    logger.warning(f"Échec de la méthode 2 (ShellExecute): {str(e)}")
-                
-                # Méthode 3: Utiliser une commande système
-                logger.info(f"Tentative d'impression avec commande système (méthode 3)")
-                try:
-                    import subprocess
-                    # Utiliser la commande système pour imprimer
-                    cmd = f'print /d:"{printer_name}" "{file_path}"'
-                    logger.info(f"Exécution de la commande: {cmd}")
-                    
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                    
-                    if result.returncode == 0:
-                        logger.info(f"Fichier {file_path} envoyé à l'imprimante {printer_name} avec commande système")
-                        return True
-                    else:
-                        logger.warning(f"Échec de la méthode 3 (commande système): {result.stderr}")
-                except Exception as e:
-                    logger.warning(f"Échec de la méthode 3 (commande système): {str(e)}")
-                
-                # Si toutes les méthodes ont échoué
-                log_error_once(f"Toutes les méthodes d'impression ont échoué pour le fichier {file_path}", f"all_print_methods_failed_{file_path}")
-                return False
-                
+                # Ouvrir le PDF avec l'application par défaut
+                logger.info(f"Ouverture du PDF avec l'application par défaut")
+                win32api.ShellExecute(
+                    0,
+                    "open",
+                    file_path,
+                    None,
+                    ".",
+                    1  # SW_SHOWNORMAL - Afficher la fenêtre normalement
+                )
+                logger.info(f"Fichier {file_path} ouvert avec l'application par défaut")
+                return True
             except Exception as e:
-                log_error_once(f"Erreur générale lors de l'impression: {str(e)}", "general_print_error")
+                log_error_once(f"Erreur lors de l'ouverture du fichier {file_path}: {str(e)}", f"open_file_error_{file_path}")
                 return False
         else:
-            log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "print_os_not_windows")
+            log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "open_os_not_windows")
             return False
     except Exception as e:
-        log_error_once(f"Erreur lors de l'impression du fichier {file_path}: {str(e)}", f"print_file_error_{file_path}")
+        log_error_once(f"Erreur lors de l'ouverture du fichier {file_path}: {str(e)}", f"open_file_error_{file_path}")
         return False
 
 # Fonction pour purger un dossier
@@ -460,18 +397,24 @@ def scan_and_print_pdfs():
                     for file in files:
                         logger.info(f"Traitement du fichier: {file}")
                         
-                        # Impression du fichier
+                        # Ouverture du fichier
                         success = print_pdf_file(file, printer_name)
                         
                         if success:
                             print_success_count += 1
-                            logger.info(f"Impression réussie: {file} (Total réussi: {print_success_count})")
+                            logger.info(f"Ouverture réussie: {file} (Total réussi: {print_success_count})")
                             
-                            # Suppression du fichier après impression
+                            # Attendre que le lecteur PDF ait le temps de se lancer et de charger le fichier
+                            # Délai configurable dans la section invoice_printer
+                            open_delay = int(config.get('invoice_printer', 'open_delay', fallback='10'))
+                            logger.info(f"Attente de {open_delay} secondes avant suppression du fichier...")
+                            time.sleep(open_delay)
+                            
+                            # Suppression du fichier après ouverture
                             try:
                                 os.remove(file)
                                 delete_success_count += 1
-                                logger.info(f"Fichier {file} supprimé après impression (Total supprimé: {delete_success_count})")
+                                logger.info(f"Fichier {file} supprimé après ouverture (Total supprimé: {delete_success_count})")
                             except Exception as e:
                                 delete_fail_count += 1
                                 log_error_once(f"Erreur lors de la suppression du fichier {file}: {str(e)}", f"delete_error_{file}")
@@ -597,6 +540,7 @@ def config_save():
         config['invoice_printer']['name'] = request.form.get('invoice_printer_name', 'FACTURE')
         config['invoice_printer']['download_folder'] = request.form.get('download_folder', 'C:\\Users\\Public\\Downloads')
         config['invoice_printer']['scan_frequency'] = request.form.get('scan_frequency', '5')
+        config['invoice_printer']['open_delay'] = request.form.get('open_delay', '10')
         config['invoice_printer']['purge_on_start'] = 'true' if request.form.get('purge_on_start') else 'false'
         config['invoice_printer']['file_extensions'] = request.form.get('file_extensions', '.pdf')
         
