@@ -1,8 +1,10 @@
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for, flash, session
 import win32print
 import win32ui
 import win32api
 import logging
+import bcrypt
+import secrets
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 import os
@@ -88,6 +90,74 @@ if not logger.handlers:
         print(f"Erreur lors de la configuration des handlers de log: {str(e)}")
 
 app = Flask(__name__)
+# Configuration de la clé secrète pour les sessions Flask
+app.secret_key = secrets.token_hex(16)  # Génère une clé secrète aléatoire
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=1)
+
+# Fonctions d'authentification
+def is_first_setup():
+    """Vérifie si c'est la première configuration (pas de mot de passe défini)"""
+    return not config.get('auth', 'password_hash', fallback='').strip()
+
+def verify_password(password):
+    """Vérifie si le mot de passe est correct"""
+    if is_first_setup():
+        return False
+    
+    stored_hash = config.get('auth', 'password_hash', fallback='')
+    stored_salt = config.get('auth', 'salt', fallback='')
+    
+    if not stored_hash or not stored_salt:
+        return False
+    
+    try:
+        # Convertir le sel stocké en bytes
+        salt = stored_salt.encode('utf-8')
+        # Hacher le mot de passe fourni avec le sel stocké
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        # Comparer avec le hash stocké
+        return hashed.decode('utf-8') == stored_hash
+    except Exception as e:
+        logger.error(f"Erreur lors de la vérification du mot de passe: {str(e)}")
+        return False
+
+def set_password(password):
+    """Définit un nouveau mot de passe"""
+    try:
+        # Générer un nouveau sel
+        salt = bcrypt.gensalt()
+        # Hacher le mot de passe avec le sel
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        
+        # Stocker le hash et le sel dans la configuration
+        config['auth']['password_hash'] = hashed.decode('utf-8')
+        config['auth']['salt'] = salt.decode('utf-8')
+        
+        # Sauvegarder la configuration
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+        
+        logger.info("Nouveau mot de passe défini avec succès")
+        return True
+    except Exception as e:
+        logger.error(f"Erreur lors de la définition du mot de passe: {str(e)}")
+        return False
+
+def is_authenticated():
+    """Vérifie si l'utilisateur est authentifié"""
+    return session.get('authenticated', False)
+
+def login_required(f):
+    """Décorateur pour protéger les routes qui nécessitent une authentification"""
+    def decorated_function(*args, **kwargs):
+        if not is_authenticated():
+            flash("Vous devez vous connecter pour accéder à cette page.", "error")
+            return redirect(url_for('config_login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 def is_local_request():
     """Vérifie si la requête vient de localhost"""
@@ -450,6 +520,139 @@ def invoice_printer_status():
         "remote_addr": request.remote_addr,
         "scheme": request.scheme
     }), 200
+
+# Routes pour la configuration
+@app.route('/config', methods=['GET'])
+def config_page():
+    """Page de configuration principale"""
+    # Vérifier si l'utilisateur est authentifié
+    if not is_authenticated():
+        return redirect(url_for('config_login'))
+    
+    # Informations système pour l'affichage
+    system_info = f"{platform.system()} {platform.release()}"
+    
+    return render_template('config.html', config=config, system_info=system_info)
+
+@app.route('/config/login', methods=['GET', 'POST'])
+def config_login():
+    """Page de connexion"""
+    first_setup = is_first_setup()
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        
+        if first_setup:
+            # Premier accès, création du mot de passe
+            confirm_password = request.form.get('confirm_password')
+            
+            if not password or not confirm_password:
+                flash("Veuillez remplir tous les champs.", "error")
+                return render_template('login.html', first_setup=first_setup)
+            
+            if password != confirm_password:
+                flash("Les mots de passe ne correspondent pas.", "error")
+                return render_template('login.html', first_setup=first_setup)
+            
+            if len(password) < 6:
+                flash("Le mot de passe doit contenir au moins 6 caractères.", "error")
+                return render_template('login.html', first_setup=first_setup)
+            
+            if set_password(password):
+                session['authenticated'] = True
+                flash("Mot de passe créé avec succès.", "success")
+                return redirect(url_for('config_page'))
+            else:
+                flash("Erreur lors de la création du mot de passe.", "error")
+                return render_template('login.html', first_setup=first_setup)
+        else:
+            # Vérification du mot de passe existant
+            if verify_password(password):
+                session['authenticated'] = True
+                return redirect(url_for('config_page'))
+            else:
+                flash("Mot de passe incorrect.", "error")
+                return render_template('login.html', first_setup=first_setup)
+    
+    return render_template('login.html', first_setup=first_setup)
+
+@app.route('/config/logout', methods=['GET'])
+def config_logout():
+    """Déconnexion"""
+    session.pop('authenticated', None)
+    flash("Vous avez été déconnecté.", "info")
+    return redirect(url_for('config_login'))
+
+@app.route('/config/save', methods=['POST'])
+@login_required
+def config_save():
+    """Sauvegarde des modifications de la configuration"""
+    try:
+        # Mise à jour de la configuration du tiroir-caisse
+        config['printer']['name'] = request.form.get('printer_name', 'TICKET')
+        config['cashdrawer']['command'] = request.form.get('drawer_command', '1b70001afa')
+        
+        # Mise à jour de la configuration de l'imprimante facture
+        config['invoice_printer']['autoprint'] = 'true' if request.form.get('autoprint') else 'false'
+        config['invoice_printer']['name'] = request.form.get('invoice_printer_name', 'FACTURE')
+        config['invoice_printer']['download_folder'] = request.form.get('download_folder', 'C:\\Users\\Public\\Downloads')
+        config['invoice_printer']['scan_frequency'] = request.form.get('scan_frequency', '5')
+        config['invoice_printer']['purge_on_start'] = 'true' if request.form.get('purge_on_start') else 'false'
+        config['invoice_printer']['file_extensions'] = request.form.get('file_extensions', '.pdf')
+        
+        # Mise à jour de la configuration du serveur
+        config['server']['port'] = request.form.get('port', '22548')
+        config['server']['host'] = request.form.get('host', '0.0.0.0')
+        
+        # Mise à jour de la configuration des logs
+        config['logs']['folder'] = request.form.get('log_folder', 'logs')
+        config['logs']['filename'] = request.form.get('log_filename', 'cashdrawer.log')
+        config['logs']['retention_days'] = request.form.get('retention_days', '30')
+        
+        # Gestion du changement de mot de passe
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_new_password = request.form.get('confirm_new_password', '')
+        
+        if current_password and new_password and confirm_new_password:
+            if not verify_password(current_password):
+                flash("Mot de passe actuel incorrect.", "error")
+                return redirect(url_for('config_page'))
+            
+            if new_password != confirm_new_password:
+                flash("Les nouveaux mots de passe ne correspondent pas.", "error")
+                return redirect(url_for('config_page'))
+            
+            if len(new_password) < 6:
+                flash("Le nouveau mot de passe doit contenir au moins 6 caractères.", "error")
+                return redirect(url_for('config_page'))
+            
+            if not set_password(new_password):
+                flash("Erreur lors de la modification du mot de passe.", "error")
+                return redirect(url_for('config_page'))
+            
+            flash("Mot de passe modifié avec succès.", "success")
+        
+        # Sauvegarde de la configuration
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+        
+        # Rechargement de la commande du tiroir-caisse
+        global OPEN_DRAWER_CMD
+        drawer_cmd_hex = config.get('cashdrawer', 'command', fallback='1b70001afa')
+        try:
+            OPEN_DRAWER_CMD = binascii.unhexlify(drawer_cmd_hex)
+        except Exception as e:
+            log_error_once(f"Erreur lors de la conversion de la commande du tiroir-caisse: {str(e)}", "drawer_cmd_conversion_error")
+        
+        flash("Configuration enregistrée avec succès.", "success")
+        logger.info("Configuration modifiée via l'interface web")
+        
+        return redirect(url_for('config_page'))
+    except Exception as e:
+        flash(f"Erreur lors de l'enregistrement de la configuration: {str(e)}", "error")
+        logger.error(f"Erreur lors de l'enregistrement de la configuration: {str(e)}")
+        return redirect(url_for('config_page'))
 
 @app.route('/invoice-printer/purge', methods=['GET'])
 def invoice_printer_purge():

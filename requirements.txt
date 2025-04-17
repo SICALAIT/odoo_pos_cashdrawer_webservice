@@ -1,3 +1,4 @@
 Flask
 pywin32
 pyinstaller
+bcrypt

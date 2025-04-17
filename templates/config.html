@@ -1,0 +1,494 @@
+{% extends "layout.html" %}
+
+{% block hero %}
+<section class="hero is-primary is-bold">
+    <div class="hero-body">
+        <div class="container">
+            <h1 class="title">
+                <i class="fas fa-cogs mr-2"></i> Configuration du Service
+            </h1>
+            <h2 class="subtitle">
+                Gérez les paramètres et testez les fonctionnalités
+            </h2>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+<div class="tabs is-boxed is-centered">
+    <ul>
+        <li class="is-active" data-target="general-tab">
+            <a>
+                <span class="icon is-small"><i class="fas fa-sliders-h"></i></span>
+                <span>Général</span>
+            </a>
+        </li>
+        <li data-target="printer-tab">
+            <a>
+                <span class="icon is-small"><i class="fas fa-print"></i></span>
+                <span>Imprimantes</span>
+            </a>
+        </li>
+        <li data-target="server-tab">
+            <a>
+                <span class="icon is-small"><i class="fas fa-server"></i></span>
+                <span>Serveur</span>
+            </a>
+        </li>
+        <li data-target="logs-tab">
+            <a>
+                <span class="icon is-small"><i class="fas fa-file-alt"></i></span>
+                <span>Logs</span>
+            </a>
+        </li>
+        <li data-target="test-tab">
+            <a>
+                <span class="icon is-small"><i class="fas fa-vial"></i></span>
+                <span>Tests</span>
+            </a>
+        </li>
+        <li data-target="security-tab">
+            <a>
+                <span class="icon is-small"><i class="fas fa-shield-alt"></i></span>
+                <span>Sécurité</span>
+            </a>
+        </li>
+    </ul>
+</div>
+
+<form method="POST" action="{{ url_for('config_save') }}">
+    <!-- Onglet Général -->
+    <div id="general-tab" class="tab-content">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-info-circle"></i></span>
+                    Informations Générales
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <label class="label">Système d'exploitation</label>
+                        <div class="control">
+                            <input class="input" type="text" value="{{ system_info }}" readonly>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Version du service</label>
+                        <div class="control">
+                            <input class="input" type="text" value="1.0.0" readonly>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Statut du service</label>
+                        <div class="control">
+                            <span class="tag is-success is-medium">
+                                <span class="icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Actif</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet Imprimantes -->
+    <div id="printer-tab" class="tab-content is-hidden">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-cash-register"></i></span>
+                    Configuration du Tiroir-Caisse
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <label class="label">Nom de l'imprimante pour le tiroir-caisse</label>
+                        <div class="control">
+                            <input class="input" type="text" name="printer_name" value="{{ config.get('printer', 'name', fallback='TICKET') }}">
+                        </div>
+                        <p class="help">Nom de l'imprimante connectée au tiroir-caisse</p>
+                    </div>
+                    <div class="field">
+                        <label class="label">Commande ESC/POS (hexadécimal)</label>
+                        <div class="control">
+                            <input class="input" type="text" name="drawer_command" value="{{ config.get('cashdrawer', 'command', fallback='1b70001afa') }}">
+                        </div>
+                        <p class="help">Commande en hexadécimal pour ouvrir le tiroir-caisse</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-file-invoice"></i></span>
+                    Configuration de l'Imprimante Facture
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <label class="label">Impression automatique</label>
+                        <div class="control">
+                            <label class="checkbox">
+                                <input type="checkbox" name="autoprint" {% if config.getboolean('invoice_printer', 'autoprint', fallback=True) %}checked{% endif %}>
+                                Activer l'impression automatique des factures
+                            </label>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Nom de l'imprimante pour les factures</label>
+                        <div class="control">
+                            <input class="input" type="text" name="invoice_printer_name" value="{{ config.get('invoice_printer', 'name', fallback='FACTURE') }}">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Dossier de téléchargement</label>
+                        <div class="control">
+                            <input class="input" type="text" name="download_folder" value="{{ config.get('invoice_printer', 'download_folder', fallback='C:\\Users\\Public\\Downloads') }}">
+                        </div>
+                        <p class="help">Dossier à surveiller pour les nouveaux fichiers PDF</p>
+                    </div>
+                    <div class="field">
+                        <label class="label">Fréquence de scan (secondes)</label>
+                        <div class="control">
+                            <input class="input" type="number" name="scan_frequency" value="{{ config.get('invoice_printer', 'scan_frequency', fallback='5') }}" min="1">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Purger au démarrage</label>
+                        <div class="control">
+                            <label class="checkbox">
+                                <input type="checkbox" name="purge_on_start" {% if config.getboolean('invoice_printer', 'purge_on_start', fallback=True) %}checked{% endif %}>
+                                Purger le dossier au démarrage du service
+                            </label>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Extensions de fichiers</label>
+                        <div class="control">
+                            <input class="input" type="text" name="file_extensions" value="{{ config.get('invoice_printer', 'file_extensions', fallback='.pdf') }}">
+                        </div>
+                        <p class="help">Extensions séparées par des virgules (ex: .pdf, .PDF)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet Serveur -->
+    <div id="server-tab" class="tab-content is-hidden">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-network-wired"></i></span>
+                    Configuration du Serveur Web
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <label class="label">Port</label>
+                        <div class="control">
+                            <input class="input" type="number" name="port" value="{{ config.get('server', 'port', fallback='22548') }}" min="1" max="65535">
+                        </div>
+                        <p class="help">Port sur lequel le serveur web écoute</p>
+                    </div>
+                    <div class="field">
+                        <label class="label">Hôte</label>
+                        <div class="control">
+                            <input class="input" type="text" name="host" value="{{ config.get('server', 'host', fallback='0.0.0.0') }}">
+                        </div>
+                        <p class="help">0.0.0.0 pour écouter sur toutes les interfaces</p>
+                    </div>
+                    <div class="notification is-warning">
+                        <span class="icon"><i class="fas fa-exclamation-triangle"></i></span>
+                        <span>Attention: La modification de ces paramètres nécessite un redémarrage du service pour prendre effet.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet Logs -->
+    <div id="logs-tab" class="tab-content is-hidden">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-file-alt"></i></span>
+                    Configuration des Logs
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <label class="label">Dossier des logs</label>
+                        <div class="control">
+                            <input class="input" type="text" name="log_folder" value="{{ config.get('logs', 'folder', fallback='logs') }}">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Nom du fichier de log</label>
+                        <div class="control">
+                            <input class="input" type="text" name="log_filename" value="{{ config.get('logs', 'filename', fallback='cashdrawer.log') }}">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Rétention des logs (jours)</label>
+                        <div class="control">
+                            <input class="input" type="number" name="retention_days" value="{{ config.get('logs', 'retention_days', fallback='30') }}" min="1">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <div class="control">
+                            <a href="{{ url_for('get_logs') }}" class="button is-info">
+                                <span class="icon"><i class="fas fa-download"></i></span>
+                                <span>Télécharger les logs</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet Tests -->
+    <div id="test-tab" class="tab-content is-hidden">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-cash-register"></i></span>
+                    Test du Tiroir-Caisse
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <div class="control">
+                            <button type="button" id="test-drawer" class="button is-primary">
+                                <span class="icon"><i class="fas fa-cash-register"></i></span>
+                                <span>Tester l'ouverture du tiroir</span>
+                            </button>
+                        </div>
+                        <p class="help">Cette fonction n'est disponible qu'en local</p>
+                    </div>
+                    <div id="drawer-result" class="notification is-hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-print"></i></span>
+                    Test de l'Imprimante Facture
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <div class="control">
+                            <button type="button" id="purge-folder" class="button is-warning">
+                                <span class="icon"><i class="fas fa-trash-alt"></i></span>
+                                <span>Purger le dossier de téléchargement</span>
+                            </button>
+                        </div>
+                        <p class="help">Cette fonction n'est disponible qu'en local</p>
+                    </div>
+                    <div id="purge-result" class="notification is-hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-server"></i></span>
+                    Test du Serveur
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <div class="control">
+                            <button type="button" id="test-status" class="button is-info">
+                                <span class="icon"><i class="fas fa-heartbeat"></i></span>
+                                <span>Vérifier le statut du serveur</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="status-result" class="notification is-hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet Sécurité -->
+    <div id="security-tab" class="tab-content is-hidden">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon mr-2"><i class="fas fa-key"></i></span>
+                    Changer le mot de passe
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    <div class="field">
+                        <label class="label">Mot de passe actuel</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="password" name="current_password">
+                            <span class="icon is-small is-left">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Nouveau mot de passe</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="password" name="new_password">
+                            <span class="icon is-small is-left">
+                                <i class="fas fa-key"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">Confirmer le nouveau mot de passe</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="password" name="confirm_new_password">
+                            <span class="icon is-small is-left">
+                                <i class="fas fa-key"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="field is-grouped is-grouped-centered mt-5">
+        <div class="control">
+            <button type="submit" class="button is-primary">
+                <span class="icon"><i class="fas fa-save"></i></span>
+                <span>Enregistrer les modifications</span>
+            </button>
+        </div>
+        <div class="control">
+            <a href="{{ url_for('config_logout') }}" class="button is-light">
+                <span class="icon"><i class="fas fa-sign-out-alt"></i></span>
+                <span>Déconnexion</span>
+            </a>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Test d'ouverture du tiroir-caisse
+        const testDrawerBtn = document.getElementById('test-drawer');
+        const drawerResult = document.getElementById('drawer-result');
+        
+        if (testDrawerBtn) {
+            testDrawerBtn.addEventListener('click', async () => {
+                drawerResult.classList.remove('is-success', 'is-danger', 'is-hidden');
+                drawerResult.classList.add('is-info');
+                drawerResult.innerHTML = '<span class="icon"><i class="fas fa-spinner fa-spin"></i></span> Test en cours...';
+                
+                try {
+                    const response = await fetch('/open-cash-drawer');
+                    const data = await response.json();
+                    
+                    drawerResult.classList.remove('is-info');
+                    if (response.ok) {
+                        drawerResult.classList.add('is-success');
+                        drawerResult.innerHTML = '<span class="icon"><i class="fas fa-check-circle"></i></span> ' + data.message;
+                    } else {
+                        drawerResult.classList.add('is-danger');
+                        drawerResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> ' + data.message;
+                    }
+                } catch (error) {
+                    drawerResult.classList.remove('is-info');
+                    drawerResult.classList.add('is-danger');
+                    drawerResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Erreur de connexion';
+                }
+            });
+        }
+        
+        // Test de purge du dossier
+        const purgeFolderBtn = document.getElementById('purge-folder');
+        const purgeResult = document.getElementById('purge-result');
+        
+        if (purgeFolderBtn) {
+            purgeFolderBtn.addEventListener('click', async () => {
+                purgeResult.classList.remove('is-success', 'is-danger', 'is-hidden');
+                purgeResult.classList.add('is-info');
+                purgeResult.innerHTML = '<span class="icon"><i class="fas fa-spinner fa-spin"></i></span> Purge en cours...';
+                
+                try {
+                    const response = await fetch('/invoice-printer/purge');
+                    const data = await response.json();
+                    
+                    purgeResult.classList.remove('is-info');
+                    if (response.ok) {
+                        purgeResult.classList.add('is-success');
+                        purgeResult.innerHTML = '<span class="icon"><i class="fas fa-check-circle"></i></span> ' + data.message;
+                    } else {
+                        purgeResult.classList.add('is-danger');
+                        purgeResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> ' + data.message;
+                    }
+                } catch (error) {
+                    purgeResult.classList.remove('is-info');
+                    purgeResult.classList.add('is-danger');
+                    purgeResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Erreur de connexion';
+                }
+            });
+        }
+        
+        // Test du statut du serveur
+        const testStatusBtn = document.getElementById('test-status');
+        const statusResult = document.getElementById('status-result');
+        
+        if (testStatusBtn) {
+            testStatusBtn.addEventListener('click', async () => {
+                statusResult.classList.remove('is-success', 'is-danger', 'is-hidden');
+                statusResult.classList.add('is-info');
+                statusResult.innerHTML = '<span class="icon"><i class="fas fa-spinner fa-spin"></i></span> Vérification en cours...';
+                
+                try {
+                    const response = await fetch('/status');
+                    const data = await response.json();
+                    
+                    statusResult.classList.remove('is-info');
+                    if (response.ok) {
+                        statusResult.classList.add('is-success');
+                        statusResult.innerHTML = `
+                            <span class="icon"><i class="fas fa-check-circle"></i></span> 
+                            <div>
+                                <p><strong>Statut:</strong> ${data.status}</p>
+                                <p><strong>Message:</strong> ${data.message}</p>
+                                <p><strong>Adresse IP:</strong> ${data.remote_addr}</p>
+                                <p><strong>Protocole:</strong> ${data.scheme}</p>
+                            </div>
+                        `;
+                    } else {
+                        statusResult.classList.add('is-danger');
+                        statusResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> ' + data.message;
+                    }
+                } catch (error) {
+                    statusResult.classList.remove('is-info');
+                    statusResult.classList.add('is-danger');
+                    statusResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Erreur de connexion';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
