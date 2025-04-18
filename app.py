@@ -15,15 +15,68 @@ import threading
 import time
 import glob
 import shutil
+import sys
 from werkzeug.serving import WSGIRequestHandler
+
+# Fonction pour déterminer si l'application est exécutée à partir d'un exécutable PyInstaller
+def is_bundled():
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+# Fonction pour obtenir le chemin correct des ressources
+def resource_path(relative_path):
+    if is_bundled():
+        # Si l'application est exécutée à partir d'un exécutable PyInstaller
+        base_path = sys._MEIPASS
+    else:
+        # Si l'application est exécutée normalement
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
 
 # Chargement de la configuration
 config = configparser.ConfigParser()
+
+# Déterminer le chemin du fichier config.ini
+if is_bundled():
+    # Si l'application est exécutée depuis un exécutable, utiliser le fichier config.ini à côté de l'exécutable
+    executable_dir = os.path.dirname(sys.executable)
+    config_path = os.path.join(executable_dir, 'config.ini')
+    print(f"Mode exécutable détecté, fichier de configuration: {config_path}")
+else:
+    # Si l'application est exécutée normalement, utiliser le fichier config.ini dans le répertoire courant
+    config_path = 'config.ini'
+    print(f"Mode normal, fichier de configuration: {config_path}")
+
 try:
-    config.read('config.ini')
+    # Vérifier si le fichier config.ini existe
+    if os.path.exists(config_path):
+        config.read(config_path)
+        print(f"Fichier de configuration lu avec succès: {config_path}")
+    else:
+        # Si le fichier n'existe pas, utiliser les valeurs par défaut et créer le fichier
+        print(f"Fichier de configuration introuvable: {config_path}")
+        print("Utilisation des valeurs par défaut et création du fichier...")
+        config['printer'] = {'name': 'TICKET'}
+        config['cashdrawer'] = {'command': '1b70001afa'}
+        config['invoice_printer'] = {
+            'autoprint': 'true',
+            'name': 'FACTURE',
+            'download_folder': 'C:\\Users\\Public\\Downloads',
+            'scan_frequency': '5',
+            'open_delay': '10',
+            'purge_on_start': 'true',
+            'file_extensions': '.pdf'
+        }
+        config['server'] = {'port': '22548', 'host': '0.0.0.0'}
+        config['logs'] = {'folder': 'logs', 'filename': 'cashdrawer.log', 'retention_days': '30'}
+        
+        # Sauvegarder le fichier de configuration
+        with open(config_path, 'w') as configfile:
+            config.write(configfile)
+        print(f"Fichier de configuration créé avec succès: {config_path}")
 except Exception as e:
-    print(f"Erreur lors de la lecture du fichier de configuration: {str(e)}")
-    # Valeurs par défaut si le fichier de configuration n'existe pas
+    print(f"Erreur lors de la lecture/écriture du fichier de configuration: {str(e)}")
+    # Utiliser les valeurs par défaut en mémoire sans sauvegarder le fichier
     config['printer'] = {'name': 'TICKET'}
     config['cashdrawer'] = {'command': '1b70001afa'}
     config['invoice_printer'] = {
@@ -31,6 +84,7 @@ except Exception as e:
         'name': 'FACTURE',
         'download_folder': 'C:\\Users\\Public\\Downloads',
         'scan_frequency': '5',
+        'open_delay': '10',
         'purge_on_start': 'true',
         'file_extensions': '.pdf'
     }
@@ -39,6 +93,14 @@ except Exception as e:
 
 # Configuration du logging
 log_folder = config.get('logs', 'folder', fallback='logs')
+
+# Si l'application est exécutée depuis un exécutable, utiliser un chemin absolu pour les logs
+if is_bundled():
+    # Utiliser un dossier logs à côté de l'exécutable
+    executable_dir = os.path.dirname(sys.executable)
+    log_folder = os.path.join(executable_dir, log_folder)
+    print(f"Mode exécutable détecté, dossier de logs: {log_folder}")
+
 try:
     if not os.path.exists(log_folder):
         os.makedirs(log_folder, exist_ok=True)
@@ -89,7 +151,16 @@ if not logger.handlers:
     except Exception as e:
         print(f"Erreur lors de la configuration des handlers de log: {str(e)}")
 
-app = Flask(__name__)
+# Initialisation de l'application Flask avec les chemins corrects pour les templates et les fichiers statiques
+if is_bundled():
+    template_folder = resource_path('templates')
+    static_folder = resource_path('static')
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+    logger.info(f"Application exécutée depuis un exécutable. Templates: {template_folder}, Static: {static_folder}")
+else:
+    app = Flask(__name__)
+    logger.info("Application exécutée en mode normal.")
+
 # Configuration de la clé secrète pour les sessions Flask
 app.secret_key = secrets.token_hex(16)  # Génère une clé secrète aléatoire
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -136,10 +207,11 @@ def set_password(password):
         config['auth']['salt'] = salt.decode('utf-8')
         
         # Sauvegarder la configuration
-        with open('config.ini', 'w') as configfile:
+        # Utiliser le même chemin que celui utilisé pour charger la configuration
+        with open(config_path, 'w') as configfile:
             config.write(configfile)
         
-        logger.info("Nouveau mot de passe défini avec succès")
+        logger.info(f"Nouveau mot de passe défini avec succès dans {config_path}")
         return True
     except Exception as e:
         logger.error(f"Erreur lors de la définition du mot de passe: {str(e)}")
@@ -578,7 +650,7 @@ def config_save():
             flash("Mot de passe modifié avec succès.", "success")
         
         # Sauvegarde de la configuration
-        with open('config.ini', 'w') as configfile:
+        with open(config_path, 'w') as configfile:
             config.write(configfile)
         
         # Rechargement de la commande du tiroir-caisse
