@@ -29,6 +29,16 @@ if not os.path.exists('config.ini'):
         config.write(configfile)
     print("Fichier config.ini créé avec succès.")
 
+# Vérification et création des dossiers nécessaires
+if not os.path.exists('templates'):
+    print("Dossier templates non trouvé, création du dossier...")
+    os.makedirs('templates', exist_ok=True)
+
+if not os.path.exists('static'):
+    print("Dossier static non trouvé, création du dossier...")
+    os.makedirs('static', exist_ok=True)
+
+# Exécution de PyInstaller
 PyInstaller.__main__.run([
     'app.py',
     '--onefile',
