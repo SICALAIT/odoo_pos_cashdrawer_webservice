@@ -57,8 +57,8 @@ PyInstaller.__main__.run([
     '--noconsole',  # Pas de console en arrière-plan
 ])
 
-# Copier le fichier config.ini dans le dossier dist
-print("Copie du fichier config.ini dans le dossier dist...")
+# Copier le fichier config.ini dans le dossier dist comme modèle
+print("Copie du fichier config.ini dans le dossier dist comme modèle...")
 if not os.path.exists('dist'):
     os.makedirs('dist')
 shutil.copy2('config.ini', 'dist/config.ini')
@@ -78,13 +78,13 @@ Configuration:
 
 Logs:
 -----
-Les logs sont stockés dans le dossier 'logs' à côté de l'exécutable.
+Les logs sont stockés dans le dossier 'C:\\ProgramData\\OdooPOS\\logs'.
 Si vous rencontrez des problèmes, consultez ces logs pour plus d'informations.
 
 Note importante:
 ---------------
-Le fichier config.ini est stocké à côté de l'exécutable et contient vos paramètres.
-Ne supprimez pas ce fichier pour conserver votre configuration.
+Le fichier config.ini est stocké dans 'C:\\ProgramData\\OdooPOS\\config.ini' et contient vos paramètres.
+Ce dossier est utilisé pour éviter les problèmes de permissions sous Windows.
 """
 
 with open('dist/README.txt', 'w') as readme_file:

@@ -38,10 +38,35 @@ config = configparser.ConfigParser()
 
 # Déterminer le chemin du fichier config.ini
 if is_bundled():
-    # Si l'application est exécutée depuis un exécutable, utiliser le fichier config.ini à côté de l'exécutable
-    executable_dir = os.path.dirname(sys.executable)
-    config_path = os.path.join(executable_dir, 'config.ini')
-    print(f"Mode exécutable détecté, fichier de configuration: {config_path}")
+    # Si l'application est exécutée depuis un exécutable
+    if platform.system() == 'Windows':
+        # Sous Windows, utiliser le dossier ProgramData
+        program_data_dir = os.path.join('C:\\', 'ProgramData', 'OdooPOS')
+        # S'assurer que le dossier existe
+        try:
+            if not os.path.exists(program_data_dir):
+                os.makedirs(program_data_dir, exist_ok=True)
+                print(f"Dossier de configuration créé: {program_data_dir}")
+            
+            # Créer aussi le dossier logs à l'avance
+            logs_dir = os.path.join(program_data_dir, 'logs')
+            if not os.path.exists(logs_dir):
+                os.makedirs(logs_dir, exist_ok=True)
+                print(f"Dossier de logs créé: {logs_dir}")
+                
+            config_path = os.path.join(program_data_dir, 'config.ini')
+            print(f"Mode exécutable Windows détecté, fichier de configuration: {config_path}")
+        except Exception as e:
+            print(f"Erreur lors de la création des dossiers: {str(e)}")
+            # Fallback au dossier de l'exécutable en cas d'erreur
+            executable_dir = os.path.dirname(sys.executable)
+            config_path = os.path.join(executable_dir, 'config.ini')
+            print(f"Utilisation du dossier de l'exécutable comme fallback: {config_path}")
+    else:
+        # Pour les autres systèmes, utiliser le dossier à côté de l'exécutable
+        executable_dir = os.path.dirname(sys.executable)
+        config_path = os.path.join(executable_dir, 'config.ini')
+        print(f"Mode exécutable détecté, fichier de configuration: {config_path}")
 else:
     # Si l'application est exécutée normalement, utiliser le fichier config.ini dans le répertoire courant
     config_path = 'config.ini'
@@ -53,27 +78,47 @@ try:
         config.read(config_path)
         print(f"Fichier de configuration lu avec succès: {config_path}")
     else:
-        # Si le fichier n'existe pas, utiliser les valeurs par défaut et créer le fichier
-        print(f"Fichier de configuration introuvable: {config_path}")
-        print("Utilisation des valeurs par défaut et création du fichier...")
-        config['printer'] = {'name': 'TICKET'}
-        config['cashdrawer'] = {'command': '1b70001afa'}
-        config['invoice_printer'] = {
-            'autoprint': 'true',
-            'name': 'FACTURE',
-            'download_folder': 'C:\\Users\\Public\\Downloads',
-            'scan_frequency': '5',
-            'open_delay': '10',
-            'purge_on_start': 'true',
-            'file_extensions': '.pdf'
-        }
-        config['server'] = {'port': '22548', 'host': '0.0.0.0'}
-        config['logs'] = {'folder': 'logs', 'filename': 'cashdrawer.log', 'retention_days': '30'}
+        # Si le fichier n'existe pas, vérifier s'il y a un fichier config.ini dans le dossier de l'exécutable
+        # (pour le cas où l'application est exécutée depuis un exécutable Windows)
+        default_config_found = False
         
-        # Sauvegarder le fichier de configuration
-        with open(config_path, 'w') as configfile:
-            config.write(configfile)
-        print(f"Fichier de configuration créé avec succès: {config_path}")
+        if is_bundled() and platform.system() == 'Windows':
+            executable_dir = os.path.dirname(sys.executable)
+            default_config_path = os.path.join(executable_dir, 'config.ini')
+            
+            if os.path.exists(default_config_path):
+                print(f"Fichier de configuration par défaut trouvé: {default_config_path}")
+                try:
+                    # Copier le fichier de configuration par défaut vers le dossier ProgramData
+                    shutil.copy2(default_config_path, config_path)
+                    print(f"Fichier de configuration copié vers: {config_path}")
+                    config.read(config_path)
+                    default_config_found = True
+                except Exception as e:
+                    print(f"Erreur lors de la copie du fichier de configuration: {str(e)}")
+        
+        # Si aucun fichier de configuration n'a été trouvé ou copié, créer un nouveau fichier
+        if not default_config_found:
+            print(f"Fichier de configuration introuvable: {config_path}")
+            print("Utilisation des valeurs par défaut et création du fichier...")
+            config['printer'] = {'name': 'TICKET'}
+            config['cashdrawer'] = {'command': '1b70001afa'}
+            config['invoice_printer'] = {
+                'autoprint': 'true',
+                'name': 'FACTURE',
+                'download_folder': 'C:\\Users\\Public\\Downloads',
+                'scan_frequency': '5',
+                'open_delay': '10',
+                'purge_on_start': 'true',
+                'file_extensions': '.pdf'
+            }
+            config['server'] = {'port': '22548', 'host': '0.0.0.0'}
+            config['logs'] = {'folder': 'logs', 'filename': 'cashdrawer.log', 'retention_days': '30'}
+            
+            # Sauvegarder le fichier de configuration
+            with open(config_path, 'w') as configfile:
+                config.write(configfile)
+            print(f"Fichier de configuration créé avec succès: {config_path}")
 except Exception as e:
     print(f"Erreur lors de la lecture/écriture du fichier de configuration: {str(e)}")
     # Utiliser les valeurs par défaut en mémoire sans sauvegarder le fichier
@@ -96,10 +141,16 @@ log_folder = config.get('logs', 'folder', fallback='logs')
 
 # Si l'application est exécutée depuis un exécutable, utiliser un chemin absolu pour les logs
 if is_bundled():
-    # Utiliser un dossier logs à côté de l'exécutable
-    executable_dir = os.path.dirname(sys.executable)
-    log_folder = os.path.join(executable_dir, log_folder)
-    print(f"Mode exécutable détecté, dossier de logs: {log_folder}")
+    if platform.system() == 'Windows':
+        # Sous Windows, utiliser le dossier ProgramData pour les logs
+        program_data_dir = os.path.join('C:\\', 'ProgramData', 'OdooPOS')
+        log_folder = os.path.join(program_data_dir, log_folder)
+        print(f"Mode exécutable Windows détecté, dossier de logs: {log_folder}")
+    else:
+        # Pour les autres systèmes, utiliser le dossier à côté de l'exécutable
+        executable_dir = os.path.dirname(sys.executable)
+        log_folder = os.path.join(executable_dir, log_folder)
+        print(f"Mode exécutable détecté, dossier de logs: {log_folder}")
 
 try:
     if not os.path.exists(log_folder):
