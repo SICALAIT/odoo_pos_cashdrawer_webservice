@@ -32,6 +32,19 @@ if not os.path.exists('config.ini'):
     with open('config.ini', 'w') as configfile:
         config.write(configfile)
     print("Fichier config.ini créé avec succès.")
+else:
+    # Vérifier si le fichier config.ini existant contient la section [auth]
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    if 'auth' not in config:
+        print("Section [auth] manquante dans le fichier config.ini existant. Ajout de la section...")
+        config['auth'] = {
+            'password_hash': '',
+            'salt': ''
+        }
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+        print("Section [auth] ajoutée au fichier config.ini existant.")
 
 # Vérification et création des dossiers nécessaires
 if not os.path.exists('templates'):

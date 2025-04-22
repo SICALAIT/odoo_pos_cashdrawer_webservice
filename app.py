@@ -80,6 +80,18 @@ try:
     if os.path.exists(config_path):
         config.read(config_path)
         print(f"Fichier de configuration lu avec succès: {config_path}")
+        
+        # Vérifier si la section [auth] existe, sinon l'ajouter
+        if 'auth' not in config:
+            print("Section [auth] manquante dans le fichier de configuration. Ajout de la section...")
+            config['auth'] = {
+                'password_hash': '',
+                'salt': ''
+            }
+            # Sauvegarder le fichier mis à jour
+            with open(config_path, 'w') as configfile:
+                config.write(configfile)
+            print(f"Section [auth] ajoutée au fichier de configuration: {config_path}")
     else:
         # Si le fichier n'existe pas, vérifier s'il y a un fichier config.ini dans le dossier de l'exécutable
         # (pour le cas où l'application est exécutée depuis un exécutable Windows)
