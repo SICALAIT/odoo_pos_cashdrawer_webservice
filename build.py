@@ -11,6 +11,10 @@ if not os.path.exists('logs'):
 if not os.path.exists('config.ini'):
     print("Le fichier config.ini n'existe pas. Création d'un fichier de configuration par défaut...")
     config = configparser.ConfigParser()
+    config['auth'] = {
+        'password_hash': '',
+        'salt': ''
+    }
     config['printer'] = {'name': 'TICKET'}
     config['cashdrawer'] = {'command': '1b70001afa'}
     config['invoice_printer'] = {
@@ -38,11 +42,14 @@ if not os.path.exists('static'):
     print("Dossier static non trouvé, création du dossier...")
     os.makedirs('static', exist_ok=True)
 
+# Version du projet
+VERSION = "1.0.0"
+
 # Exécution de PyInstaller
 PyInstaller.__main__.run([
     'app.py',
     '--onefile',
-    '--name=cashdrawer_service',
+    f'--name=cashdrawer_service_v{VERSION}',
     '--add-data=logs;logs',  # Inclure le dossier logs
     '--add-data=config.ini;.',  # Inclure le fichier de configuration
     '--add-data=templates;templates',  # Inclure le dossier templates
@@ -65,7 +72,7 @@ shutil.copy2('config.ini', 'dist/config.ini')
 print("Fichier config.ini copié avec succès.")
 
 # Créer un fichier README.txt dans le dossier dist pour expliquer comment utiliser l'application
-readme_content = """Service Tiroir-Caisse pour Odoo POS
+readme_content = f"""Service Tiroir-Caisse pour Odoo POS v{VERSION}
 ====================================
 
 Ce service permet d'ouvrir le tiroir-caisse et d'imprimer des factures depuis Odoo POS.
@@ -85,6 +92,10 @@ Note importante:
 ---------------
 Le fichier config.ini est stocké dans 'C:\\ProgramData\\OdooPOS\\config.ini' et contient vos paramètres.
 Ce dossier est utilisé pour éviter les problèmes de permissions sous Windows.
+
+Version:
+-------
+Version {VERSION} - Consultez le fichier CHANGELOG.md pour les détails des modifications.
 """
 
 with open('dist/README.txt', 'w') as readme_file:

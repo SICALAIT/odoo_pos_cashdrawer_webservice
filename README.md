@@ -25,6 +25,12 @@ Le service utilise un fichier de configuration `config.ini` pour paramétrer l'i
 Le fichier `config.ini` contient les sections suivantes :
 
 ```ini
+[auth]
+# Mot de passe hashé pour l'accès à la configuration (vide = premier accès)
+password_hash = 
+# Sel pour le hachage du mot de passe
+salt = 
+
 [printer]
 # Nom de l'imprimante configurée pour le tiroir-caisse
 name = TICKET
@@ -34,15 +40,19 @@ name = TICKET
 command = 1b70001afa
 
 [invoice_printer]
-# Nom de l'imprimante configurée pour les factures
+# Activer/désactiver l'ouverture automatique des PDF (true/false)
+autoprint = true
+# Nom de l'imprimante (utilisé uniquement pour les logs)
 name = FACTURE
 # Dossier de téléchargement de Google Chrome à surveiller
 download_folder = C:/Users/Public/Downloads
 # Fréquence de scan du dossier en secondes
 scan_frequency = 5
+# Délai en secondes avant suppression du fichier après ouverture
+open_delay = 10
 # Purger le dossier au premier lancement (true/false)
 purge_on_start = true
-# Extensions de fichiers à imprimer (séparées par des virgules)
+# Extensions de fichiers à ouvrir (séparées par des virgules)
 file_extensions = .pdf
 
 [server]
@@ -210,6 +220,46 @@ Toutes les tentatives d'accès sont enregistrées dans les logs avec :
 Pour toute question ou problème :
 - Créez une issue sur GitHub
 - Contactez le support technique
+
+## 🔄 Mise à jour de la version
+
+Pour mettre à jour la version du service pour les futures versions, suivez ces étapes simples :
+
+1. Modifiez la variable `VERSION` dans les fichiers suivants :
+   ```python
+   # Dans app.py
+   VERSION = "1.0.0"  # Changez en "1.0.1", "1.1.0", "2.0.0", etc.
+   
+   # Dans build.py
+   VERSION = "1.0.0"  # Utilisez la même version que dans app.py
+   ```
+
+2. Mettez à jour le fichier CHANGELOG.md en ajoutant une nouvelle section pour la nouvelle version :
+   ```markdown
+   ## [1.1.0] - 2025-05-15
+   
+   ### Ajouté
+   - Nouvelle fonctionnalité A
+   - Nouvelle fonctionnalité B
+   
+   ### Modifié
+   - Amélioration de la fonctionnalité X
+   - Mise à jour de la dépendance Y
+   
+   ### Corrigé
+   - Correction du bug Z
+   ```
+
+3. Reconstruisez l'exécutable avec la nouvelle version :
+   ```bash
+   python build.py
+   ```
+
+Cette méthode simple garantit que la version est cohérente dans tout le projet :
+- Dans le nom de l'exécutable généré
+- Dans les logs au démarrage du service
+- Dans l'interface web de configuration
+- Dans la documentation
 
 ## 📄 Licence
 

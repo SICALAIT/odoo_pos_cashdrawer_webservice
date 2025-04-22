@@ -78,7 +78,7 @@
                     <div class="field">
                         <label class="label">Version du service</label>
                         <div class="control">
-                            <input class="input" type="text" value="1.0.0" readonly>
+                            <input class="input" type="text" value="{{ version }}" readonly>
                         </div>
                     </div>
                     <div class="field">
@@ -252,14 +252,21 @@
                             <input class="input" type="number" name="retention_days" value="{{ config.get('logs', 'retention_days', fallback='30') }}" min="1">
                         </div>
                     </div>
-                    <div class="field">
+                    <div class="field is-grouped">
                         <div class="control">
                             <a href="{{ url_for('get_logs') }}" class="button is-info">
                                 <span class="icon"><i class="fas fa-download"></i></span>
                                 <span>Télécharger les logs</span>
                             </a>
                         </div>
+                        <div class="control">
+                            <button type="button" id="purge-logs" class="button is-danger">
+                                <span class="icon"><i class="fas fa-trash-alt"></i></span>
+                                <span>Purger les logs</span>
+                            </button>
+                        </div>
                     </div>
+                    <div id="purge-logs-result" class="notification is-hidden"></div>
                 </div>
             </div>
         </div>
@@ -455,6 +462,36 @@
                     purgeResult.classList.remove('is-info');
                     purgeResult.classList.add('is-danger');
                     purgeResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Erreur de connexion';
+                }
+            });
+        }
+        
+        // Purge des logs
+        const purgeLogsBtn = document.getElementById('purge-logs');
+        const purgeLogsResult = document.getElementById('purge-logs-result');
+        
+        if (purgeLogsBtn) {
+            purgeLogsBtn.addEventListener('click', async () => {
+                purgeLogsResult.classList.remove('is-success', 'is-danger', 'is-hidden');
+                purgeLogsResult.classList.add('is-info');
+                purgeLogsResult.innerHTML = '<span class="icon"><i class="fas fa-spinner fa-spin"></i></span> Purge des logs en cours...';
+                
+                try {
+                    const response = await fetch('/logs/purge');
+                    const data = await response.json();
+                    
+                    purgeLogsResult.classList.remove('is-info');
+                    if (response.ok) {
+                        purgeLogsResult.classList.add('is-success');
+                        purgeLogsResult.innerHTML = '<span class="icon"><i class="fas fa-check-circle"></i></span> ' + data.message;
+                    } else {
+                        purgeLogsResult.classList.add('is-danger');
+                        purgeLogsResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> ' + data.message;
+                    }
+                } catch (error) {
+                    purgeLogsResult.classList.remove('is-info');
+                    purgeLogsResult.classList.add('is-danger');
+                    purgeLogsResult.innerHTML = '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> Erreur de connexion';
                 }
             });
         }

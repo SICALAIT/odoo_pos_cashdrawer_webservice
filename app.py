@@ -18,6 +18,9 @@ import shutil
 import sys
 from werkzeug.serving import WSGIRequestHandler
 
+# Version du service
+VERSION = "1.0.0"
+
 # Fonction pour déterminer si l'application est exécutée à partir d'un exécutable PyInstaller
 def is_bundled():
     return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
@@ -101,6 +104,10 @@ try:
         if not default_config_found:
             print(f"Fichier de configuration introuvable: {config_path}")
             print("Utilisation des valeurs par défaut et création du fichier...")
+            config['auth'] = {
+                'password_hash': '',
+                'salt': ''
+            }
             config['printer'] = {'name': 'TICKET'}
             config['cashdrawer'] = {'command': '1b70001afa'}
             config['invoice_printer'] = {
@@ -122,6 +129,10 @@ try:
 except Exception as e:
     print(f"Erreur lors de la lecture/écriture du fichier de configuration: {str(e)}")
     # Utiliser les valeurs par défaut en mémoire sans sauvegarder le fichier
+    config['auth'] = {
+        'password_hash': '',
+        'salt': ''
+    }
     config['printer'] = {'name': 'TICKET'}
     config['cashdrawer'] = {'command': '1b70001afa'}
     config['invoice_printer'] = {
@@ -365,6 +376,67 @@ def get_logs():
         log_error_once(f"Erreur lors de l'accès aux logs: {str(e)}", "logs_access_error")
         return jsonify({"status": "error", "message": f"Impossible d'accéder aux logs: {str(e)}"}), 500
 
+@app.route('/logs/purge', methods=['GET'])
+@login_required
+def purge_logs():
+    """Endpoint pour purger les logs"""
+    try:
+        # Vérification que le fichier de logs existe
+        if os.path.exists(log_file):
+            # Fermer tous les handlers de logs pour libérer le fichier
+            for handler in logger.handlers[:]:
+                handler.close()
+                logger.removeHandler(handler)
+            
+            # Supprimer le fichier de logs
+            os.remove(log_file)
+            
+            # Supprimer les fichiers de logs rotés
+            log_dir = os.path.dirname(log_file)
+            log_basename = os.path.basename(log_file)
+            for f in os.listdir(log_dir):
+                if f.startswith(log_basename) and f != log_basename:
+                    try:
+                        os.remove(os.path.join(log_dir, f))
+                    except Exception as e:
+                        print(f"Erreur lors de la suppression du fichier de log roté {f}: {str(e)}")
+            
+            # Recréer les handlers de logs
+            try:
+                # Handler pour fichier avec rotation
+                file_handler = TimedRotatingFileHandler(
+                    log_file,
+                    when="midnight",
+                    interval=1,
+                    backupCount=retention_days
+                )
+                file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+                logger.addHandler(file_handler)
+                
+                # Ajout d'un handler console pour voir les logs en temps réel
+                console_handler = logging.StreamHandler()
+                console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+                logger.addHandler(console_handler)
+            except Exception as e:
+                print(f"Erreur lors de la reconfiguration des handlers de log: {str(e)}")
+            
+            # Log de l'action
+            logger.info("Logs purgés avec succès")
+            
+            return jsonify({
+                "status": "success",
+                "message": "Logs purgés avec succès"
+            }), 200
+        else:
+            return jsonify({
+                "status": "success",
+                "message": "Aucun fichier de logs à purger"
+            }), 200
+    except Exception as e:
+        error_msg = f"Erreur lors de la purge des logs: {str(e)}"
+        print(error_msg)
+        return jsonify({"status": "error", "message": error_msg}), 500
+
 # Fonction pour ouvrir un fichier PDF avec le lecteur par défaut
 def print_pdf_file(file_path, printer_name):
     try:
@@ -598,7 +670,7 @@ def config_page():
     # Informations système pour l'affichage
     system_info = f"{platform.system()} {platform.release()}"
     
-    return render_template('config.html', config=config, system_info=system_info)
+    return render_template('config.html', config=config, system_info=system_info, version=VERSION)
 
 @app.route('/config/login', methods=['GET', 'POST'])
 def config_login():
@@ -753,8 +825,8 @@ def invoice_printer_purge():
         }), 500
 
 if __name__ == '__main__':
-    print("Démarrage du service tiroir-caisse")
-    logger.info("Démarrage du service tiroir-caisse")
+    print(f"Démarrage du service tiroir-caisse v{VERSION}")
+    logger.info(f"Démarrage du service tiroir-caisse v{VERSION}")
     
     # Affichage des informations système
     system_info = f"Système d'exploitation: {platform.system()} {platform.release()}"
