@@ -482,8 +482,11 @@ def print_pdf_file(file_path, printer_name):
                 import subprocess
                 logger.info(f"Tentative d'impression avec PdftoPrinter.exe")
                 
-                # Exécution de PdftoPrinter.exe avec le fichier PDF et le nom de l'imprimante entre guillemets
-                process = subprocess.Popen([pdftoPrinter_path, file_path, f'"{printer_name}"'], 
+                # Exécution de PdftoPrinter.exe avec le fichier PDF et le nom de l'imprimante
+                # Construction de la commande complète sous forme de chaîne pour éviter les problèmes de guillemets
+                command = f'"{pdftoPrinter_path}" "{file_path}" "{printer_name}"'
+                logger.info(f"Commande d'impression: {command}")
+                process = subprocess.Popen(command, 
                                           shell=True, 
                                           stdout=subprocess.PIPE, 
                                           stderr=subprocess.PIPE)
