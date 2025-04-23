@@ -470,22 +470,41 @@ def print_pdf_file(file_path, printer_name):
             return False
             
         if platform.system() == 'Windows':
+            # Méthode 1: Utiliser os.startfile (méthode native Windows)
             try:
-                # Ouvrir le PDF avec l'application par défaut
-                logger.info(f"Ouverture du PDF avec l'application par défaut")
-                win32api.ShellExecute(
-                    0,
-                    "open",
-                    file_path,
-                    None,
-                    ".",
-                    1  # SW_SHOWNORMAL - Afficher la fenêtre normalement
-                )
-                logger.info(f"Fichier {file_path} ouvert avec l'application par défaut")
+                logger.info(f"Tentative d'ouverture avec os.startfile")
+                os.startfile(file_path)
+                logger.info(f"Fichier {file_path} ouvert avec os.startfile")
                 return True
-            except Exception as e:
-                log_error_once(f"Erreur lors de l'ouverture du fichier {file_path}: {str(e)}", f"open_file_error_{file_path}")
-                return False
+            except Exception as e1:
+                logger.warning(f"Échec de l'ouverture avec os.startfile: {str(e1)}")
+                
+                # Méthode 2: Utiliser subprocess.Popen
+                try:
+                    import subprocess
+                    logger.info(f"Tentative d'ouverture avec subprocess.Popen")
+                    subprocess.Popen(['start', '', file_path], shell=True)
+                    logger.info(f"Fichier {file_path} ouvert avec subprocess.Popen")
+                    return True
+                except Exception as e2:
+                    logger.warning(f"Échec de l'ouverture avec subprocess.Popen: {str(e2)}")
+                    
+                    # Méthode 3: Utiliser win32api.ShellExecute comme dernier recours
+                    try:
+                        logger.info(f"Tentative d'ouverture avec win32api.ShellExecute")
+                        win32api.ShellExecute(
+                            0,
+                            "open",
+                            file_path,
+                            None,
+                            ".",
+                            1  # SW_SHOWNORMAL - Afficher la fenêtre normalement
+                        )
+                        logger.info(f"Fichier {file_path} ouvert avec win32api.ShellExecute")
+                        return True
+                    except Exception as e3:
+                        log_error_once(f"Échec de toutes les méthodes d'ouverture pour {file_path}: {str(e3)}", f"open_file_error_{file_path}")
+                        return False
         else:
             log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "open_os_not_windows")
             return False
