@@ -449,10 +449,10 @@ def purge_logs():
         print(error_msg)
         return jsonify({"status": "error", "message": error_msg}), 500
 
-# Fonction pour imprimer un fichier PDF avec Pdf2Printer.exe
+# Fonction pour imprimer un fichier PDF avec PdftoPrinter.exe
 def print_pdf_file(file_path, printer_name):
     try:
-        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante {printer_name} avec Pdf2Printer.exe")
+        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante {printer_name} avec PdftoPrinter.exe")
         
         # Normalisation du chemin Windows
         if file_path.startswith('C:/'):
@@ -470,20 +470,20 @@ def print_pdf_file(file_path, printer_name):
             return False
             
         if platform.system() == 'Windows':
-            # Chemin vers Pdf2Printer.exe
-            pdf2printer_path = "C:\\OdooPOS\\Pdf2Printer.exe"
+            # Chemin vers PdftoPrinter.exe
+            pdftoPrinter_path = "C:\\OdooPOS\\PdftoPrinter.exe"
             
-            # Vérification que Pdf2Printer.exe existe
-            if not os.path.exists(pdf2printer_path):
-                log_error_once(f"Pdf2Printer.exe introuvable: {pdf2printer_path}", "pdf2printer_not_found")
+            # Vérification que PdftoPrinter.exe existe
+            if not os.path.exists(pdftoPrinter_path):
+                log_error_once(f"PdftoPrinter.exe introuvable: {pdftoPrinter_path}", "pdftoPrinter_not_found")
                 return False
                 
             try:
                 import subprocess
-                logger.info(f"Tentative d'impression avec Pdf2Printer.exe")
+                logger.info(f"Tentative d'impression avec PdftoPrinter.exe")
                 
-                # Exécution de Pdf2Printer.exe avec le fichier PDF et le nom de l'imprimante
-                process = subprocess.Popen([pdf2printer_path, file_path, printer_name], 
+                # Exécution de PdftoPrinter.exe avec le fichier PDF et le nom de l'imprimante
+                process = subprocess.Popen([pdftoPrinter_path, file_path, printer_name], 
                                           shell=True, 
                                           stdout=subprocess.PIPE, 
                                           stderr=subprocess.PIPE)
@@ -498,18 +498,18 @@ def print_pdf_file(file_path, printer_name):
                         return True
                     else:
                         error_output = stderr.decode('utf-8', errors='replace') if stderr else "Aucune erreur spécifique"
-                        log_error_once(f"Échec de l'impression avec Pdf2Printer.exe (code {exit_code}): {error_output}", f"pdf2printer_error_{file_path}")
+                        log_error_once(f"Échec de l'impression avec PdftoPrinter.exe (code {exit_code}): {error_output}", f"pdftoPrinter_error_{file_path}")
                         return False
                         
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    logger.warning(f"Timeout lors de l'impression avec Pdf2Printer.exe")
+                    logger.warning(f"Timeout lors de l'impression avec PdftoPrinter.exe")
                     # On considère que c'est un succès même en cas de timeout
-                    # car Pdf2Printer.exe peut continuer à fonctionner en arrière-plan
+                    # car PdftoPrinter.exe peut continuer à fonctionner en arrière-plan
                     return True
                     
             except Exception as e:
-                log_error_once(f"Erreur lors de l'exécution de Pdf2Printer.exe: {str(e)}", f"pdf2printer_exec_error_{file_path}")
+                log_error_once(f"Erreur lors de l'exécution de PdftoPrinter.exe: {str(e)}", f"pdftoPrinter_exec_error_{file_path}")
                 return False
         else:
             log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "open_os_not_windows")
