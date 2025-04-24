@@ -449,10 +449,10 @@ def purge_logs():
         print(error_msg)
         return jsonify({"status": "error", "message": error_msg}), 500
 
-# Fonction pour imprimer un fichier PDF avec PdftoPrinter.exe
+# Fonction pour imprimer un fichier PDF avec le script print.bat
 def print_pdf_file(file_path, printer_name):
     try:
-        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante {printer_name} avec PdftoPrinter.exe")
+        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante {printer_name} avec print.bat")
         
         # Normalisation du chemin Windows
         if file_path.startswith('C:/'):
@@ -477,14 +477,27 @@ def print_pdf_file(file_path, printer_name):
             if not os.path.exists(pdftoPrinter_path):
                 log_error_once(f"PdftoPrinter.exe introuvable: {pdftoPrinter_path}", "pdftoPrinter_not_found")
                 return False
+            
+            # Chemin vers le script print.bat (à côté de l'exécutable cashdrawer)
+            if is_bundled():
+                executable_dir = os.path.dirname(sys.executable)
+                print_bat_path = os.path.join(executable_dir, 'print.bat')
+            else:
+                # En mode développement, utiliser le répertoire courant
+                print_bat_path = 'print.bat'
+                
+            # Vérification que print.bat existe
+            if not os.path.exists(print_bat_path):
+                log_error_once(f"Script print.bat introuvable: {print_bat_path}", "print_bat_not_found")
+                return False
                 
             try:
                 import subprocess
-                logger.info(f"Tentative d'impression avec PdftoPrinter.exe")
+                logger.info(f"Tentative d'impression avec print.bat")
                 
-                # Exécution de PdftoPrinter.exe avec le fichier PDF et le nom de l'imprimante
+                # Exécution de print.bat avec les paramètres requis
                 # Construction de la commande complète sous forme de chaîne pour éviter les problèmes de guillemets
-                command = f'"{pdftoPrinter_path}" "{file_path}" "{printer_name}"'
+                command = f'"{print_bat_path}" "{pdftoPrinter_path}" "{file_path}" "{printer_name}"'
                 logger.info(f"Commande d'impression: {command}")
                 process = subprocess.Popen(command, 
                                           shell=True, 
@@ -501,18 +514,18 @@ def print_pdf_file(file_path, printer_name):
                         return True
                     else:
                         error_output = stderr.decode('utf-8', errors='replace') if stderr else "Aucune erreur spécifique"
-                        log_error_once(f"Échec de l'impression avec PdftoPrinter.exe (code {exit_code}): {error_output}", f"pdftoPrinter_error_{file_path}")
+                        log_error_once(f"Échec de l'impression avec print.bat (code {exit_code}): {error_output}", f"print_bat_error_{file_path}")
                         return False
                         
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    logger.warning(f"Timeout lors de l'impression avec PdftoPrinter.exe")
+                    logger.warning(f"Timeout lors de l'impression avec print.bat")
                     # On considère que c'est un succès même en cas de timeout
-                    # car PdftoPrinter.exe peut continuer à fonctionner en arrière-plan
+                    # car le script peut continuer à fonctionner en arrière-plan
                     return True
                     
             except Exception as e:
-                log_error_once(f"Erreur lors de l'exécution de PdftoPrinter.exe: {str(e)}", f"pdftoPrinter_exec_error_{file_path}")
+                log_error_once(f"Erreur lors de l'exécution de print.bat: {str(e)}", f"print_bat_exec_error_{file_path}")
                 return False
         else:
             log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "open_os_not_windows")
