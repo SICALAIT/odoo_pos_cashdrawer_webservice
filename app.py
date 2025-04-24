@@ -449,10 +449,10 @@ def purge_logs():
         print(error_msg)
         return jsonify({"status": "error", "message": error_msg}), 500
 
-# Fonction pour imprimer un fichier PDF avec le script print.bat
-def print_pdf_file(file_path, printer_name):
+# Fonction pour imprimer un fichier PDF directement via socket
+def print_pdf_file(file_path, printer_name, max_attempts=3):
     try:
-        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante {printer_name} avec print.bat")
+        logger.info(f"Tentative d'impression du fichier: {file_path} sur l'imprimante {printer_name} via socket")
         
         # Normalisation du chemin Windows
         if file_path.startswith('C:/'):
@@ -468,67 +468,96 @@ def print_pdf_file(file_path, printer_name):
         if not os.access(file_path, os.R_OK):
             log_error_once(f"Permissions insuffisantes pour lire le fichier: {file_path}", f"file_permission_{file_path}")
             return False
-            
-        if platform.system() == 'Windows':
-            # Chemin vers PdftoPrinter.exe
-            pdftoPrinter_path = "C:\\OdooPOS\\PdftoPrinter.exe"
-            
-            # Vérification que PdftoPrinter.exe existe
-            if not os.path.exists(pdftoPrinter_path):
-                log_error_once(f"PdftoPrinter.exe introuvable: {pdftoPrinter_path}", "pdftoPrinter_not_found")
-                return False
-            
-            # Chemin vers le script print.bat (à côté de l'exécutable cashdrawer)
-            if is_bundled():
-                executable_dir = os.path.dirname(sys.executable)
-                print_bat_path = os.path.join(executable_dir, 'print.bat')
-            else:
-                # En mode développement, utiliser le répertoire courant
-                print_bat_path = 'print.bat'
-                
-            # Vérification que print.bat existe
-            if not os.path.exists(print_bat_path):
-                log_error_once(f"Script print.bat introuvable: {print_bat_path}", "print_bat_not_found")
-                return False
-                
+        
+        # Récupérer l'adresse IP et le port de l'imprimante à partir du nom
+        # Par défaut, on utilise l'adresse 172.17.240.20 et le port 9100
+        printer_ip = "172.17.240.20"
+        printer_port = 9100
+        
+        # Si le nom de l'imprimante contient l'adresse IP et le port au format "nom@ip:port"
+        if "@" in printer_name:
             try:
-                import subprocess
-                logger.info(f"Tentative d'impression avec print.bat")
-                
-                # Exécution de print.bat avec les paramètres requis
-                # Construction de la commande complète sous forme de chaîne pour éviter les problèmes de guillemets
-                command = f'"{print_bat_path}" "{pdftoPrinter_path}" "{file_path}" "{printer_name}"'
-                logger.info(f"Commande d'impression: {command}")
-                process = subprocess.Popen(command, 
-                                          shell=True, 
-                                          stdout=subprocess.PIPE, 
-                                          stderr=subprocess.PIPE)
-                
-                # Attendre que le processus se termine avec un timeout
-                try:
-                    stdout, stderr = process.communicate(timeout=30)  # 30 secondes de timeout
-                    exit_code = process.returncode
-                    
-                    if exit_code == 0:
-                        logger.info(f"Fichier {file_path} imprimé avec succès sur {printer_name}")
-                        return True
-                    else:
-                        error_output = stderr.decode('utf-8', errors='replace') if stderr else "Aucune erreur spécifique"
-                        log_error_once(f"Échec de l'impression avec print.bat (code {exit_code}): {error_output}", f"print_bat_error_{file_path}")
-                        return False
-                        
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    logger.warning(f"Timeout lors de l'impression avec print.bat")
-                    # On considère que c'est un succès même en cas de timeout
-                    # car le script peut continuer à fonctionner en arrière-plan
-                    return True
-                    
+                name_part, ip_part = printer_name.split("@", 1)
+                if ":" in ip_part:
+                    ip, port = ip_part.split(":", 1)
+                    printer_ip = ip
+                    printer_port = int(port)
+                else:
+                    printer_ip = ip_part
             except Exception as e:
-                log_error_once(f"Erreur lors de l'exécution de print.bat: {str(e)}", f"print_bat_exec_error_{file_path}")
+                logger.warning(f"Format d'adresse d'imprimante invalide: {printer_name}. Utilisation des valeurs par défaut. Erreur: {str(e)}")
+        
+        logger.info(f"Impression vers l'imprimante à l'adresse {printer_ip}:{printer_port}")
+        
+        # Impression directe via socket
+        try:
+            # Ouvrir le fichier en mode binaire
+            with open(file_path, 'rb') as f:
+                contenu = f.read()
+            
+            # Établir une connexion avec l'imprimante
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(10)  # Timeout de 10 secondes
+            s.connect((printer_ip, printer_port))
+            
+            # Envoyer le contenu du fichier
+            s.sendall(contenu)
+            
+            # Fermer la connexion
+            s.close()
+            
+            logger.info(f"Fichier {file_path} envoyé avec succès à l'imprimante {printer_ip}:{printer_port}")
+            return True
+        except socket.error as e:
+            log_error_once(f"Erreur de connexion à l'imprimante {printer_ip}:{printer_port}: {str(e)}", f"socket_error_{printer_ip}:{printer_port}")
+            
+            # Si Windows est disponible, essayer la méthode Windows en fallback
+            if platform.system() == 'Windows':
+                logger.info(f"Tentative de fallback vers la méthode d'impression Windows...")
+                try:
+                    import win32print
+                    import win32api
+                    
+                    # Récupérer le nom exact de l'imprimante depuis la liste des imprimantes Windows
+                    exact_printer_name = printer_name
+                    if "@" in exact_printer_name:
+                        exact_printer_name = exact_printer_name.split("@", 1)[0]
+                    
+                    try:
+                        printers = [printer[2] for printer in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL)]
+                        for p in printers:
+                            if p.lower() == exact_printer_name.lower():
+                                exact_printer_name = p  # Utiliser le nom exact avec la casse correcte
+                                logger.info(f"Nom exact de l'imprimante trouvé: '{exact_printer_name}'")
+                                break
+                    except Exception as e:
+                        logger.warning(f"Impossible de récupérer le nom exact de l'imprimante: {str(e)}")
+                    
+                    # Définir l'imprimante par défaut temporairement
+                    current_printer = win32print.GetDefaultPrinter()
+                    win32print.SetDefaultPrinter(exact_printer_name)
+                    
+                    # Imprimer le fichier PDF
+                    win32api.ShellExecute(0, "print", file_path, None, ".", 0)
+                    logger.info(f"Commande d'impression Windows envoyée pour {file_path}")
+                    
+                    # Attendre un peu pour que l'impression commence
+                    time.sleep(5)
+                    
+                    # Restaurer l'imprimante par défaut
+                    win32print.SetDefaultPrinter(current_printer)
+                    
+                    logger.info(f"Impression Windows réussie pour {file_path}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Erreur lors de l'impression Windows: {str(e)}")
+                    log_error_once(f"Échec de l'impression Windows: {str(e)}", f"windows_print_error_{file_path}")
+                    return False
+            else:
                 return False
-        else:
-            log_error_once(f"Ce service n'est compatible qu'avec Windows. Système détecté: {platform.system()}", "open_os_not_windows")
+        except Exception as e:
+            log_error_once(f"Erreur lors de l'impression via socket: {str(e)}", f"socket_general_error_{file_path}")
             return False
     except Exception as e:
         log_error_once(f"Erreur lors de l'impression du fichier {file_path}: {str(e)}", f"print_file_error_{file_path}")
