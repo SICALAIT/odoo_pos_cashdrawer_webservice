@@ -125,6 +125,8 @@ try:
             config['invoice_printer'] = {
                 'autoprint': 'true',
                 'name': 'FACTURE',
+                'printer_ip': '172.17.240.20',
+                'printer_port': '9100',
                 'download_folder': 'C:\\Users\\Public\\Downloads',
                 'scan_frequency': '5',
                 'open_delay': '10',
@@ -150,6 +152,8 @@ except Exception as e:
     config['invoice_printer'] = {
         'autoprint': 'true',
         'name': 'FACTURE',
+        'printer_ip': '172.17.240.20',
+        'printer_port': '9100',
         'download_folder': 'C:\\Users\\Public\\Downloads',
         'scan_frequency': '5',
         'open_delay': '10',
@@ -469,10 +473,9 @@ def print_pdf_file(file_path, printer_name, max_attempts=3):
             log_error_once(f"Permissions insuffisantes pour lire le fichier: {file_path}", f"file_permission_{file_path}")
             return False
         
-        # Récupérer l'adresse IP et le port de l'imprimante à partir du nom
-        # Par défaut, on utilise l'adresse 172.17.240.20 et le port 9100
-        printer_ip = "172.17.240.20"
-        printer_port = 9100
+        # Récupérer l'adresse IP et le port de l'imprimante à partir de la configuration
+        printer_ip = config.get('invoice_printer', 'printer_ip', fallback="172.17.240.20")
+        printer_port = int(config.get('invoice_printer', 'printer_port', fallback="9100"))
         
         # Si le nom de l'imprimante contient l'adresse IP et le port au format "nom@ip:port"
         if "@" in printer_name:
@@ -485,7 +488,7 @@ def print_pdf_file(file_path, printer_name, max_attempts=3):
                 else:
                     printer_ip = ip_part
             except Exception as e:
-                logger.warning(f"Format d'adresse d'imprimante invalide: {printer_name}. Utilisation des valeurs par défaut. Erreur: {str(e)}")
+                logger.warning(f"Format d'adresse d'imprimante invalide: {printer_name}. Utilisation des valeurs de configuration. Erreur: {str(e)}")
         
         logger.info(f"Impression vers l'imprimante à l'adresse {printer_ip}:{printer_port}")
         
@@ -815,6 +818,8 @@ def config_save():
         # Mise à jour de la configuration de l'imprimante facture
         config['invoice_printer']['autoprint'] = 'true' if request.form.get('autoprint') else 'false'
         config['invoice_printer']['name'] = request.form.get('invoice_printer_name', 'FACTURE')
+        config['invoice_printer']['printer_ip'] = request.form.get('printer_ip', '172.17.240.20')
+        config['invoice_printer']['printer_port'] = request.form.get('printer_port', '9100')
         config['invoice_printer']['download_folder'] = request.form.get('download_folder', 'C:\\Users\\Public\\Downloads')
         config['invoice_printer']['scan_frequency'] = request.form.get('scan_frequency', '5')
         config['invoice_printer']['open_delay'] = request.form.get('open_delay', '10')
