@@ -20,6 +20,16 @@ pip install -r requirements.txt
 
 Le service utilise un fichier de configuration `config.ini` pour paramétrer l'imprimante et d'autres options.
 
+### Emplacement du fichier de configuration
+
+Lorsque vous exécutez l'application en tant qu'exécutable Windows généré avec PyInstaller, le fichier de configuration est stocké à l'emplacement suivant :
+- `C:\ProgramData\OdooPOS\config.ini`
+
+Ce dossier est utilisé pour éviter les problèmes de permissions sous Windows. Les logs sont également stockés dans ce dossier :
+- `C:\ProgramData\OdooPOS\logs\`
+
+Lorsque vous exécutez l'application en mode développement (script Python), le fichier de configuration est stocké dans le répertoire courant.
+
 ### Fichier de configuration
 
 Le fichier `config.ini` contient les sections suivantes :
@@ -44,6 +54,10 @@ command = 1b70001afa
 autoprint = true
 # Nom de l'imprimante (utilisé uniquement pour les logs)
 name = FACTURE
+# Adresse IP de l'imprimante réseau (pour impression directe via socket)
+printer_ip = 172.17.240.20
+# Port de l'imprimante réseau
+printer_port = 9100
 # Dossier de téléchargement de Google Chrome à surveiller
 download_folder = C:/Users/Public/Downloads
 # Fréquence de scan du dossier en secondes
@@ -104,6 +118,10 @@ Vous pouvez configurer cette fonctionnalité dans la section `[invoice_printer]`
 autoprint = true
 # Nom de l'imprimante (utilisé uniquement pour les logs)
 name = FACTURE
+# Adresse IP de l'imprimante réseau
+printer_ip = 172.17.240.20
+# Port de l'imprimante réseau
+printer_port = 9100
 # Dossier à surveiller
 download_folder = C:/Users/Public/Downloads
 # Fréquence de scan en secondes
@@ -140,8 +158,17 @@ python app.py
 python build.py
 ```
 
-2. L'exécutable sera créé dans le dossier `dist`
-3. Lancer `cashdrawer_service.exe`
+2. L'exécutable sera créé dans le dossier `dist` avec le nom `cashdrawer_service_v1.0.0.exe`
+3. Lancer l'exécutable
+
+### Interface de configuration
+
+Le service dispose d'une interface de configuration web accessible à l'adresse suivante :
+```
+http://localhost:22548/config
+```
+
+Lors de la première utilisation, vous devrez créer un mot de passe pour sécuriser l'accès à la configuration.
 
 Le service expose trois endpoints sur le port 22548 :
 
@@ -184,7 +211,7 @@ flowchart LR
 
 ## 📝 Logs
 
-Les logs sont générés dans le dossier `logs/cashdrawer.log` et contiennent :
+Les logs sont générés dans le dossier configuré et contiennent :
 - Date et heure de chaque ouverture
 - Statut de l'opération
 - Erreurs éventuelles
@@ -192,8 +219,9 @@ Les logs sont générés dans le dossier `logs/cashdrawer.log` et contiennent :
 
 Les logs sont automatiquement :
 - Rotés chaque jour à minuit
-- Conservés pendant 30 jours
+- Conservés pendant le nombre de jours configuré (par défaut 30 jours)
 - Accessibles via l'endpoint `/logs` depuis n'importe quelle machine du réseau
+- Purgeables via l'interface de configuration web
 
 ## 🔒 Sécurité
 
@@ -204,6 +232,7 @@ Le service est configuré avec deux niveaux d'accès :
 Les endpoints sont sécurisés :
 - `/open-cash-drawer` : Accessible uniquement en local
 - `/status` et `/logs` : Accessibles depuis le réseau
+- `/config` : Protégé par authentification avec mot de passe
 
 Protocoles supportés :
 - HTTP et HTTPS : Le service accepte les requêtes en HTTP et HTTPS
